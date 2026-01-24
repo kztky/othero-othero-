@@ -141,18 +141,20 @@
       }, [board, currentPlayer]);
 
       useEffect(() => {
-        if (currentPlayer === aiColor && !gameOver) {
+        if (
+          currentPlayer === aiColor &&
+          !gameOver &&
+          !aiThinking &&
+          !coinTossing
+        ) {
           setAiThinking(true);
           setTimeout(() => {
-            const moves = getValidMoves(board, aiColor);
-            if (moves.length) {
-              const m = moves[Math.floor(Math.random() * moves.length)];
-              makeMove(m.r, m.c, aiColor);
-            }
+            makeAIMove();
             setAiThinking(false);
           }, 600);
         }
       }, [currentPlayer]);
+
 
       /** ===============================
        *  Render
@@ -222,4 +224,5 @@
 
 </body>
 </html>
+
 
