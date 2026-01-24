@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="パステルカラーのオセロゲーム - AIと対戦しよう！" />
+  <meta name="theme-color" content="#B8D4E8" />
+  <title>パステルオセロ</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" sizes="192x192" href="./icon-192.png" />
+  <link rel="icon" sizes="512x512" href="./icon-512.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+
+  <!-- React 18 -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Icons / Tailwind -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const { RotateCcw, Undo, Menu, X } = lucide;
+
+    const BOARD_SIZE = 8;
+    const EMPTY = 0;
+    const BLACK = 1;
+    const WHITE = 2;
+
+    const DIFFICULTY = {
+      EASY: "easy",
+      NORMAL: "normal",
+      HARD: "hard",
+      DEMON: "demon",
+    };
+
+    const directions = [
+      [-1, -1], [-1, 0], [-1, 1],
+      [ 0, -1],          [ 0, 1],
+      [ 1, -1], [ 1, 0], [ 1, 1],
+    ];
+
+    const getInitialBoard = () => {
+      const board = Array.from({ length: BOARD_SIZE }, () =>
+        Array(BOARD_SIZE).fill(EMPTY)
+      );
+      board[3][3] = WHITE;
+      board[3][4] = BLACK;
+      board[4][3] = BLACK;
+      board[4][4] = WHITE;
+      return board;
+    };
+
+    const OthelloGame = () => {
+      const [board, setBoard] = useState(getInitialBoard);
+      const [currentPlayer, setCurrentPlayer] = useState(BLACK);
+      const [playerColor, setPlayerColor] = useState(BLACK);
+      const [aiColor, setAiColor] = useState(WHITE);
+      const [validMoves, setValidMoves] = useState([]);
+      const [history, setHistory] = useState([]);
+      const [gameOver, setGameOver] = useState(false);
+      const [aiThinking, setAiThinking] = useState(false);
+      const [difficulty, setDifficulty] = useState(DIFFICULTY.NORMAL);
+
+      /** ===============================
+       *  Game Core
+       * =============================== */
+
+      const isValidMove = (b, r, c, p) => {
+        if (b[r][c] !== EMPTY) return false;
+        const opponent = p === BLACK ? WHITE : BLACK;
+
+        return directions.some(([dx, dy]) => {
+          let x = r + dx, y = c + dy;
+          let hasOpponent = false;
+
+          while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+            if (b[x][y] === opponent) hasOpponent = true;
+            else if (b[x][y] === p && hasOpponent) return true;
+            else break;
+            x += dx;
+            y += dy;
+          }
+          return false;
+        });
+      };
+
+      const getValidMoves = (b, p) =>
+        b.flatMap((row, r) =>
+          row.map((_, c) => ({ r, c }))
+             .filter(({ r, c }) => isValidMove(b, r, c, p))
+        );
+
+      const makeMove = (r, c, p) => {
+        if (!isValidMove(board, r, c, p)) return;
+        const next = board.map(row => [...row]);
+        const opponent = p === BLACK ? WHITE : BLACK;
+        next[r][c] = p;
+
+        directions.forEach(([dx, dy]) => {
+          const flips = [];
+          let x = r + dx, y = c + dy;
+          while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+            if (next[x][y] === opponent) flips.push([x, y]);
+            else if (next[x][y] === p) {
+              flips.forEach(([fx, fy]) => next[fx][fy] = p);
+              break;
+            } else break;
+            x += dx;
+            y += dy;
+          }
+        });
+
+        setHistory(h => [...h, board]);
+        setBoard(next);
+        setCurrentPlayer(p === BLACK ? WHITE : BLACK);
+      };
+
+      /** ===============================
+       *  Effects
+       * =============================== */
+
+      useEffect(() => {
+        setValidMoves(getValidMoves(board, currentPlayer));
+      }, [board, currentPlayer]);
+
+      useEffect(() => {
+        if (currentPlayer === aiColor && !gameOver) {
+          setAiThinking(true);
+          setTimeout(() => {
+            const moves = getValidMoves(board, aiColor);
+            if (moves.length) {
+              const m = moves[Math.floor(Math.random() * moves.length)];
+              makeMove(m.r, m.c, aiColor);
+            }
+            setAiThinking(false);
+          }, 600);
+        }
+      }, [currentPlayer]);
+
+      /** ===============================
+       *  Render
+       * =============================== */
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-6">
+          <h1 className="text-3xl font-bold text-center mb-6">パステルオセロ</h1>
+
+          <div className="max-w-md mx-auto bg-white rounded-2xl p-4 shadow">
+            <div className="grid grid-cols-8 gap-1 bg-green-200 p-2 rounded-xl">
+              {board.map((row, r) =>
+                row.map((cell, c) => {
+                  const isValid = validMoves.some(m => m.r === r && m.c === c);
+                  return (
+                    <div
+                      key={`${r}-${c}`}
+                      onClick={() =>
+                        currentPlayer === playerColor && makeMove(r, c, playerColor)
+                      }
+                      className={`aspect-square rounded-lg flex items-center justify-center
+                        ${isValid ? "ring-2 ring-green-400" : ""}
+                        bg-green-300 cursor-pointer`}
+                    >
+                      {cell === BLACK && <div className="w-4/5 h-4/5 bg-black rounded-full" />}
+                      {cell === WHITE && <div className="w-4/5 h-4/5 bg-white rounded-full" />}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setBoard(getInitialBoard());
+                setHistory([]);
+                setGameOver(false);
+                setCurrentPlayer(BLACK);
+              }}
+              className="mt-4 w-full py-2 rounded-xl bg-blue-200 hover:bg-blue-300"
+            >
+              新規ゲーム
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<OthelloGame />);
+  </script>
+</body>
+</html>
