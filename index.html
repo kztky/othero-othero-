@@ -3,52 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="パステルカラーのオセロゲーム - AIと対戦しよう！" />
-  <meta name="theme-color" content="#B8D4E8" />
   <title>パステルオセロ</title>
 
   <!-- PWA -->
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" sizes="192x192" href="./icon-192.png" />
   <link rel="icon" sizes="512x512" href="./icon-512.png" />
-  <link rel="apple-touch-icon" href="./icon-192.png" />
 
-  <!-- React 18 -->
+  <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Icons / Tailwind -->
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
-  </style>
 </head>
 
-<body>
+<body class="bg-gradient-to-br from-blue-50 to-green-50 min-h-screen">
   <div id="root"></div>
 
   <script type="text/babel">
     const { useState, useEffect } = React;
-    const { RotateCcw, Undo, Menu, X } = lucide;
 
     const BOARD_SIZE = 8;
     const EMPTY = 0;
     const BLACK = 1;
     const WHITE = 2;
 
-    const DIFFICULTY = {
-      EASY: "easy",
-      NORMAL: "normal",
-      HARD: "hard",
-      DEMON: "demon",
-    };
+    const DIFFICULTY = ["easy", "normal", "hard"];
 
     const directions = [
       [-1, -1], [-1, 0], [-1, 1],
@@ -57,172 +39,167 @@
     ];
 
     const getInitialBoard = () => {
-      const board = Array.from({ length: BOARD_SIZE }, () =>
+      const b = Array.from({ length: BOARD_SIZE }, () =>
         Array(BOARD_SIZE).fill(EMPTY)
       );
-      board[3][3] = WHITE;
-      board[3][4] = BLACK;
-      board[4][3] = BLACK;
-      board[4][4] = WHITE;
-      return board;
+      b[3][3] = WHITE;
+      b[3][4] = BLACK;
+      b[4][3] = BLACK;
+      b[4][4] = WHITE;
+      return b;
     };
 
-    const OthelloGame = () => {
+    const Othello = () => {
       const [board, setBoard] = useState(getInitialBoard);
-      const [currentPlayer, setCurrentPlayer] = useState(BLACK);
-      const [playerColor, setPlayerColor] = useState(BLACK);
-      const [aiColor, setAiColor] = useState(WHITE);
-      const [validMoves, setValidMoves] = useState([]);
-      const [history, setHistory] = useState([]);
+      const [current, setCurrent] = useState(BLACK);
+      const [difficulty, setDifficulty] = useState("normal");
       const [gameOver, setGameOver] = useState(false);
-      const [aiThinking, setAiThinking] = useState(false);
-      const [difficulty, setDifficulty] = useState(DIFFICULTY.NORMAL);
 
-      /** ===============================
-       *  Game Core
-       * =============================== */
+      const opponent = p => (p === BLACK ? WHITE : BLACK);
 
       const isValidMove = (b, r, c, p) => {
         if (b[r][c] !== EMPTY) return false;
-        const opponent = p === BLACK ? WHITE : BLACK;
-
         return directions.some(([dx, dy]) => {
-          let x = r + dx, y = c + dy;
-          let hasOpponent = false;
-
+          let x = r + dx, y = c + dy, found = false;
           while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-            if (b[x][y] === opponent) hasOpponent = true;
-            else if (b[x][y] === p && hasOpponent) return true;
+            if (b[x][y] === opponent(p)) found = true;
+            else if (b[x][y] === p && found) return true;
             else break;
-            x += dx;
-            y += dy;
+            x += dx; y += dy;
           }
           return false;
         });
       };
 
-      const getValidMoves = (b, p) =>
+      const getMoves = (b, p) =>
         b.flatMap((row, r) =>
           row.map((_, c) => ({ r, c }))
-             .filter(({ r, c }) => isValidMove(b, r, c, p))
+             .filter(m => isValidMove(b, m.r, m.c, p))
         );
 
-      const makeMove = (r, c, p) => {
+      const applyMove = (r, c, p) => {
         if (!isValidMove(board, r, c, p)) return;
         const next = board.map(row => [...row]);
-        const opponent = p === BLACK ? WHITE : BLACK;
         next[r][c] = p;
 
         directions.forEach(([dx, dy]) => {
           const flips = [];
           let x = r + dx, y = c + dy;
           while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-            if (next[x][y] === opponent) flips.push([x, y]);
+            if (next[x][y] === opponent(p)) flips.push([x, y]);
             else if (next[x][y] === p) {
               flips.forEach(([fx, fy]) => next[fx][fy] = p);
               break;
             } else break;
-            x += dx;
-            y += dy;
+            x += dx; y += dy;
           }
         });
 
-        setHistory(h => [...h, board]);
         setBoard(next);
-        setCurrentPlayer(p === BLACK ? WHITE : BLACK);
+        setCurrent(opponent(p));
       };
 
-      /** ===============================
-       *  Effects
-       * =============================== */
+      const aiMove = () => {
+        const moves = getMoves(board, WHITE);
+        if (!moves.length) return;
 
-      useEffect(() => {
-        setValidMoves(getValidMoves(board, currentPlayer));
-      }, [board, currentPlayer]);
-
-      useEffect(() => {
-        if (
-          currentPlayer === aiColor &&
-          !gameOver &&
-          !aiThinking &&
-          !coinTossing
-        ) {
-          setAiThinking(true);
-          setTimeout(() => {
-            makeAIMove();
-            setAiThinking(false);
-          }, 600);
+        if (difficulty === "easy" || (difficulty === "normal" && Math.random() < 0.5)) {
+          const m = moves[Math.floor(Math.random() * moves.length)];
+          applyMove(m.r, m.c, WHITE);
+          return;
         }
-      }, [currentPlayer]);
 
+        // hard: 最大反転数
+        let best = moves[0], bestScore = -1;
+        for (const m of moves) {
+          let score = 0;
+          directions.forEach(([dx, dy]) => {
+            let x = m.r + dx, y = m.c + dy;
+            while (x >= 0 && x < 8 && y >= 0 && y < 8) {
+              if (board[x][y] === BLACK) score++;
+              else break;
+              x += dx; y += dy;
+            }
+          });
+          if (score > bestScore) {
+            bestScore = score;
+            best = m;
+          }
+        }
+        applyMove(best.r, best.c, WHITE);
+      };
 
-      /** ===============================
-       *  Render
-       * =============================== */
+      useEffect(() => {
+        if (gameOver) return;
+
+        const myMoves = getMoves(board, current);
+        const oppMoves = getMoves(board, opponent(current));
+
+        if (!myMoves.length && !oppMoves.length) {
+          setGameOver(true);
+          return;
+        }
+
+        if (current === WHITE && myMoves.length) {
+          setTimeout(aiMove, 500);
+        }
+        if (current === WHITE && !myMoves.length) {
+          setCurrent(BLACK);
+        }
+      }, [board, current]);
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-6">
-          <h1 className="text-3xl font-bold text-center mb-6">パステルオセロ</h1>
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-center mb-4">パステルオセロ</h1>
 
-          <div className="max-w-md mx-auto bg-white rounded-2xl p-4 shadow">
-            <div className="grid grid-cols-8 gap-1 bg-green-200 p-2 rounded-xl">
-              {board.map((row, r) =>
-                row.map((cell, c) => {
-                  const isValid = validMoves.some(m => m.r === r && m.c === c);
-                  return (
-                    <div
-                      key={`${r}-${c}`}
-                      onClick={() =>
-                        currentPlayer === playerColor && makeMove(r, c, playerColor)
-                      }
-                      className={`aspect-square rounded-lg flex items-center justify-center
-                        ${isValid ? "ring-2 ring-green-400" : ""}
-                        bg-green-300 cursor-pointer`}
-                    >
-                      {cell === BLACK && <div className="w-4/5 h-4/5 bg-black rounded-full" />}
-                      {cell === WHITE && <div className="w-4/5 h-4/5 bg-white rounded-full" />}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <button
-              onClick={() => {
-                setBoard(getInitialBoard());
-                setHistory([]);
-                setGameOver(false);
-                setCurrentPlayer(BLACK);
-              }}
-              className="mt-4 w-full py-2 rounded-xl bg-blue-200 hover:bg-blue-300"
-            >
-              新規ゲーム
-            </button>
+          <div className="flex justify-center gap-2 mb-4">
+            {DIFFICULTY.map(d => (
+              <button
+                key={d}
+                onClick={() => {
+                  setDifficulty(d);
+                  setBoard(getInitialBoard());
+                  setCurrent(BLACK);
+                  setGameOver(false);
+                }}
+                className={`px-3 py-1 rounded-full ${
+                  difficulty === d ? "bg-blue-500 text-white" : "bg-blue-100"
+                }`}
+              >
+                {d}
+              </button>
+            ))}
           </div>
+
+          <div className="grid grid-cols-8 gap-1 max-w-xs mx-auto bg-green-300 p-2 rounded">
+            {board.map((row, r) =>
+              row.map((cell, c) => (
+                <div
+                  key={r + "-" + c}
+                  onClick={() => current === BLACK && applyMove(r, c, BLACK)}
+                  className="aspect-square bg-green-400 rounded flex items-center justify-center"
+                >
+                  {cell === BLACK && <div className="w-4/5 h-4/5 bg-black rounded-full" />}
+                  {cell === WHITE && <div className="w-4/5 h-4/5 bg-white rounded-full" />}
+                </div>
+              ))
+            )}
+          </div>
+
+          {gameOver && (
+            <p className="text-center mt-4 font-bold">ゲーム終了</p>
+          )}
         </div>
       );
     };
 
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<OthelloGame />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<Othello />);
   </script>
-  
+
   <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker
-          .register('./service-worker.js')
-          .then(reg => {
-            console.log('Service Worker registered:', reg.scope);
-          })
-          .catch(err => {
-            console.error('Service Worker registration failed:', err);
-          });
-      });
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js");
     }
   </script>
-
 </body>
 </html>
-
-
