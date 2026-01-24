@@ -7,27 +7,69 @@
   <meta name="theme-color" content="#B8D4E8" />
   <title>パステルオセロ</title>
 
-  <!-- PWA -->
+  <!-- PWA設定 -->
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" sizes="192x192" href="./icon-192.png" />
-  <link rel="icon" sizes="512x512" href="./icon-512.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
 
-  <!-- React / Babel -->
+  <!-- React & Babel -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body { margin: 0; padding: 0; overflow-x: hidden; }
+  </style>
 </head>
 
-<body class="bg-gradient-to-br from-blue-50 to-green-50 min-h-screen">
+<body>
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useMemo } = React;
 
+    /** ===============================
+     *  Small inline icons (SVG)
+     * =============================== */
+    const Icon = ({ children, size = 20 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {children}
+      </svg>
+    );
+    const RotateCcwIcon = (props) => (
+      <Icon {...props}>
+        <path d="M3 12a9 9 0 1 0 3-6.7" />
+        <path d="M3 4v6h6" />
+      </Icon>
+    );
+    const UndoIcon = (props) => (
+      <Icon {...props}>
+        <path d="M9 14l-4-4 4-4" />
+        <path d="M5 10h8a6 6 0 0 1 0 12h-3" />
+      </Icon>
+    );
+    const MenuIcon = (props) => (
+      <Icon {...props}>
+        <path d="M4 6h16" />
+        <path d="M4 12h16" />
+        <path d="M4 18h16" />
+      </Icon>
+    );
+    const XIcon = (props) => (
+      <Icon {...props}>
+        <path d="M18 6L6 18" />
+        <path d="M6 6l12 12" />
+      </Icon>
+    );
+
+    /** ===============================
+     *  Game constants
+     * =============================== */
     const BOARD_SIZE = 8;
     const EMPTY = 0;
     const BLACK = 1;
@@ -37,12 +79,13 @@
       EASY: "easy",
       NORMAL: "normal",
       HARD: "hard",
+      DEMON: "demon",
     };
 
     const directions = [
-      [-1,-1],[-1,0],[-1,1],
-      [0,-1],[0,1],
-      [1,-1],[1,0],[1,1],
+      [-1, -1], [-1, 0], [-1, 1],
+      [ 0, -1],          [ 0, 1],
+      [ 1, -1], [ 1, 0], [ 1, 1],
     ];
 
     const getInitialBoard = () => {
@@ -56,167 +99,844 @@
       return b;
     };
 
+    /** ===============================
+     *  Othello Game
+     * =============================== */
     const OthelloGame = () => {
       const [board, setBoard] = useState(getInitialBoard);
       const [currentPlayer, setCurrentPlayer] = useState(BLACK);
-      const [difficulty, setDifficulty] = useState(DIFFICULTY.NORMAL);
+      const [validMoves, setValidMoves] = useState([]);
+
       const [gameOver, setGameOver] = useState(false);
+      const [history, setHistory] = useState([]);
 
-      const opponent = p => (p === BLACK ? WHITE : BLACK);
+      const [aiThinking, setAiThinking] = useState(false);
+      const [difficulty, setDifficulty] = useState(DIFFICULTY.NORMAL);
 
-      const isValidMove = (b, r, c, p) => {
-        if (b[r][c] !== EMPTY) return false;
-        return directions.some(([dx, dy]) => {
-          let x = r + dx, y = c + dy, seen = false;
-          while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-            if (b[x][y] === opponent(p)) seen = true;
-            else if (b[x][y] === p && seen) return true;
+      const [coinTossing, setCoinTossing] = useState(false);
+      const [coinResult, setCoinResult] = useState(null);
+      const [playerColor, setPlayerColor] = useState(BLACK);
+      const [aiColor, setAiColor] = useState(WHITE);
+      const [coinTossCount, setCoinTossCount] = useState(0);
+      const [showDeathWarning, setShowDeathWarning] = useState(false);
+
+      const [menuOpen, setMenuOpen] = useState(false);
+
+      const [stats, setStats] = useState(() => {
+        const saved = localStorage.getItem("othelloStats");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (!parsed?.difficultyStats?.demon) {
+            parsed.difficultyStats.demon = { wins: 0, losses: 0 };
+          }
+          return parsed;
+        }
+        return {
+          recentGames: [],
+          difficultyStats: {
+            easy: { wins: 0, losses: 0 },
+            normal: { wins: 0, losses: 0 },
+            hard: { wins: 0, losses: 0 },
+            demon: { wins: 0, losses: 0 },
+          },
+        };
+      });
+
+      /** ===============================
+       *  Persistence
+       * =============================== */
+      useEffect(() => {
+        localStorage.setItem("othelloStats", JSON.stringify(stats));
+      }, [stats]);
+
+      /** ===============================
+       *  Core helpers
+       * =============================== */
+      const isValidMove = (b, row, col, player) => {
+        if (b[row][col] !== EMPTY) return false;
+        const opponent = player === BLACK ? WHITE : BLACK;
+
+        for (const [dx, dy] of directions) {
+          let x = row + dx;
+          let y = col + dy;
+          let hasOpponent = false;
+
+          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+            if (b[x][y] === EMPTY) break;
+            if (b[x][y] === opponent) {
+              hasOpponent = true;
+            } else if (b[x][y] === player && hasOpponent) {
+              return true;
+            } else {
+              break;
+            }
+            x += dx;
+            y += dy;
+          }
+        }
+        return false;
+      };
+
+      const getValidMoves = (b, player) => {
+        const moves = [];
+        for (let r = 0; r < BOARD_SIZE; r++) {
+          for (let c = 0; c < BOARD_SIZE; c++) {
+            if (isValidMove(b, r, c, player)) moves.push({ row: r, col: c });
+          }
+        }
+        return moves;
+      };
+
+      const countPieces = (b = board) => {
+        let black = 0, white = 0;
+        for (const row of b) {
+          for (const cell of row) {
+            if (cell === BLACK) black++;
+            if (cell === WHITE) white++;
+          }
+        }
+        return { black, white };
+      };
+
+      constconst = null;
+
+      const endGame = (finalBoard = board) => {
+        setGameOver(true);
+        setCoinTossCount(0);
+
+        const { black, white } = countPieces(finalBoard);
+        const playerScore = playerColor === BLACK ? black : white;
+        const aiScore = aiColor === BLACK ? black : white;
+
+        const result =
+          playerScore > aiScore ? "win" :
+          playerScore < aiScore ? "loss" : "draw";
+
+        const newGame = {
+          date: new Date().toISOString(),
+          difficulty,
+          playerScore,
+          aiScore,
+          result,
+          playerColor: playerColor === BLACK ? "black" : "white",
+        };
+
+        setStats((prev) => {
+          const next = { ...prev };
+          next.recentGames = [newGame, ...(prev.recentGames || [])].slice(0, 5);
+          if (!next.difficultyStats[difficulty]) {
+            next.difficultyStats[difficulty] = { wins: 0, losses: 0 };
+          }
+          if (result === "win") next.difficultyStats[difficulty].wins++;
+          if (result === "loss") next.difficultyStats[difficulty].losses++;
+          return next;
+        });
+      };
+
+      const makeMove = (row, col, player) => {
+        if (!isValidMove(board, row, col, player)) return false;
+
+        const newBoard = board.map((r) => [...r]);
+        newBoard[row][col] = player;
+
+        const opponent = player === BLACK ? WHITE : BLACK;
+
+        for (const [dx, dy] of directions) {
+          const toFlip = [];
+          let x = row + dx;
+          let y = col + dy;
+
+          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+            if (newBoard[x][y] === EMPTY) break;
+            if (newBoard[x][y] === opponent) {
+              toFlip.push([x, y]);
+            } else if (newBoard[x][y] === player) {
+              for (const [fx, fy] of toFlip) newBoard[fx][fy] = player;
+              break;
+            } else {
+              break;
+            }
+            x += dx;
+            y += dy;
+          }
+        }
+
+        // history: store snapshot BEFORE move
+        setHistory((h) => [...h, { board: board.map(r => [...r]), player }]);
+        setBoard(newBoard);
+        setCurrentPlayer(player === BLACK ? WHITE : BLACK);
+        return true;
+      };
+
+      /** ===============================
+       *  AI
+       * =============================== */
+      const evaluateMove = (b, row, col, player) => {
+        const opponent = player === BLACK ? WHITE : BLACK;
+        let score = 0;
+
+        // corners
+        const corners = [[0,0],[0,7],[7,0],[7,7]];
+        if (corners.some(([r,c]) => r === row && c === col)) score += 100;
+
+        // edges
+        const edges = row === 0 || row === 7 || col === 0 || col === 7;
+        if (edges) score += 10;
+
+        // flips count
+        for (const [dx, dy] of directions) {
+          let x = row + dx, y = col + dy, flips = 0;
+          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+            if (b[x][y] === EMPTY) break;
+            if (b[x][y] === opponent) flips++;
+            else if (b[x][y] === player && flips > 0) { score += flips; break; }
             else break;
             x += dx; y += dy;
           }
-          return false;
-        });
+        }
+
+        return score;
       };
 
-      const getValidMoves = (b, p) =>
-        b.flatMap((row, r) =>
-          row.map((_, c) => ({ r, c }))
-             .filter(m => isValidMove(b, m.r, m.c, p))
-        );
+      const simulateMove = (b, row, col, player) => {
+        b[row][col] = player;
+        const opponent = player === BLACK ? WHITE : BLACK;
 
-      const makeMove = (r, c, p) => {
-        if (!isValidMove(board, r, c, p)) return;
-        const next = board.map(row => [...row]);
-        next[r][c] = p;
-
-        directions.forEach(([dx, dy]) => {
-          const flips = [];
-          let x = r + dx, y = c + dy;
-          while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-            if (next[x][y] === opponent(p)) flips.push([x, y]);
-            else if (next[x][y] === p) {
-              flips.forEach(([fx, fy]) => next[fx][fy] = p);
-              break;
-            } else break;
+        for (const [dx, dy] of directions) {
+          const toFlip = [];
+          let x = row + dx, y = col + dy;
+          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+            if (b[x][y] === EMPTY) break;
+            if (b[x][y] === opponent) toFlip.push([x, y]);
+            else if (b[x][y] === player) { toFlip.forEach(([fx, fy]) => (b[fx][fy] = player)); break; }
+            else break;
             x += dx; y += dy;
           }
+        }
+      };
+
+      const evaluateBoardMedium = (b, player) => {
+        const opponent = player === BLACK ? WHITE : BLACK;
+        let score = 0;
+        const w = [
+          [100,-20,10,5,5,10,-20,100],
+          [-20,-50,-2,-2,-2,-2,-50,-20],
+          [10,-2,-1,-1,-1,-1,-2,10],
+          [5,-2,-1,-1,-1,-1,-2,5],
+          [5,-2,-1,-1,-1,-1,-2,5],
+          [10,-2,-1,-1,-1,-1,-2,10],
+          [-20,-50,-2,-2,-2,-2,-50,-20],
+          [100,-20,10,5,5,10,-20,100],
+        ];
+        for (let i=0;i<8;i++){
+          for (let j=0;j<8;j++){
+            if (b[i][j] === player) score += w[i][j];
+            else if (b[i][j] === opponent) score -= w[i][j];
+          }
+        }
+        return score;
+      };
+
+      const minimaxMedium = (b, player, depth, alpha=-Infinity, beta=Infinity) => {
+        if (depth === 0) return { score: evaluateBoardMedium(b, aiColor), move: null };
+
+        const moves = getValidMoves(b, player);
+        if (moves.length === 0) {
+          const opp = player === aiColor ? playerColor : aiColor;
+          const oppMoves = getValidMoves(b, opp);
+          if (oppMoves.length === 0) return { score: evaluateBoardMedium(b, aiColor), move: null };
+          return minimaxMedium(b, opp, depth-1, alpha, beta);
+        }
+
+        let bestMove = moves[0];
+        let bestScore = player === aiColor ? -Infinity : Infinity;
+
+        for (const m of moves) {
+          const tmp = b.map(r => [...r]);
+          simulateMove(tmp, m.row, m.col, player);
+          const res = minimaxMedium(tmp, player === aiColor ? playerColor : aiColor, depth-1, alpha, beta);
+
+          if (player === aiColor) {
+            if (res.score > bestScore) { bestScore = res.score; bestMove = m; }
+            alpha = Math.max(alpha, res.score);
+          } else {
+            if (res.score < bestScore) { bestScore = res.score; bestMove = m; }
+            beta = Math.min(beta, res.score);
+          }
+          if (beta <= alpha) break;
+        }
+
+        return { score: bestScore, move: bestMove };
+      };
+
+      const evaluateMoveQuick = (b, row, col, player) => {
+        const corners = [[0,0],[0,7],[7,0],[7,7]];
+        if (corners.some(([r,c]) => r === row && c === col)) return 1000;
+
+        const danger = [[0,1],[1,0],[1,1],[0,6],[1,6],[1,7],[6,0],[6,1],[7,1],[6,6],[6,7],[7,6]];
+        if (danger.some(([r,c]) => r === row && c === col)) return -500;
+
+        const edges = row === 0 || row === 7 || col === 0 || col === 7;
+        return edges ? 100 : 0;
+      };
+
+      const countStableFromCorner = (b, startRow, startCol, player) => {
+        let count = 0;
+        const rowDir = startRow === 0 ? 1 : -1;
+        for (let i = startRow + rowDir; i >= 0 && i < 8; i += rowDir) {
+          if (b[i][startCol] === player) count++;
+          else break;
+        }
+        const colDir = startCol === 0 ? 1 : -1;
+        for (let j = startCol + colDir; j >= 0 && j < 8; j += colDir) {
+          if (b[startRow][j] === player) count++;
+          else break;
+        }
+        return count;
+      };
+
+      const countStableDiscs = (b, player) => {
+        let count = 0;
+        const corners = [[0,0],[0,7],[7,0],[7,7]];
+        for (const [cr, cc] of corners) {
+          if (b[cr][cc] === player) {
+            count++;
+            count += countStableFromCorner(b, cr, cc, player);
+          }
+        }
+        return count;
+      };
+
+      const evaluateBoardAdvanced = (b, player) => {
+        const opponent = player === BLACK ? WHITE : BLACK;
+        let score = 0;
+        const w = [
+          [100,-20,10,5,5,10,-20,100],
+          [-20,-50,-2,-2,-2,-2,-50,-20],
+          [10,-2,-1,-1,-1,-1,-2,10],
+          [5,-2,-1,-1,-1,-1,-2,5],
+          [5,-2,-1,-1,-1,-1,-2,5],
+          [10,-2,-1,-1,-1,-1,-2,10],
+          [-20,-50,-2,-2,-2,-2,-50,-20],
+          [100,-20,10,5,5,10,-20,100],
+        ];
+        for (let i=0;i<8;i++){
+          for (let j=0;j<8;j++){
+            if (b[i][j] === player) score += w[i][j];
+            else if (b[i][j] === opponent) score -= w[i][j];
+          }
+        }
+
+        const playerStable = countStableDiscs(b, player);
+        const oppStable = countStableDiscs(b, opponent);
+        score += (playerStable - oppStable) * 25;
+
+        const playerMoves = getValidMoves(b, player).length;
+        const oppMoves = getValidMoves(b, opponent).length;
+        score += (playerMoves - oppMoves) * 5;
+
+        const corners = [[0,0],[0,7],[7,0],[7,7]];
+        for (const [r,c] of corners) {
+          if (b[r][c] === player) score += 100;
+          if (b[r][c] === opponent) score -= 100;
+        }
+
+        return score;
+      };
+
+      const minimaxAdvanced = (b, player, depth, alpha=-Infinity, beta=Infinity) => {
+        if (depth === 0) return { score: evaluateBoardAdvanced(b, aiColor), move: null };
+
+        const moves = getValidMoves(b, player);
+        if (moves.length === 0) {
+          const opp = player === aiColor ? playerColor : aiColor;
+          const oppMoves = getValidMoves(b, opp);
+          if (oppMoves.length === 0) return { score: evaluateBoardAdvanced(b, aiColor), move: null };
+          return minimaxAdvanced(b, opp, depth-1, alpha, beta);
+        }
+
+        let bestMove = moves[0];
+        let bestScore = player === aiColor ? -Infinity : Infinity;
+
+        const sorted = [...moves].sort((a,b2) => {
+          const sa = evaluateMoveQuick(b, a.row, a.col, player);
+          const sb = evaluateMoveQuick(b, b2.row, b2.col, player);
+          return player === aiColor ? (sb - sa) : (sa - sb);
         });
 
-        setBoard(next);
-        setCurrentPlayer(opponent(p));
+        for (const m of sorted) {
+          const tmp = b.map(r => [...r]);
+          simulateMove(tmp, m.row, m.col, player);
+          const res = minimaxAdvanced(tmp, player === aiColor ? playerColor : aiColor, depth-1, alpha, beta);
+
+          if (player === aiColor) {
+            if (res.score > bestScore) { bestScore = res.score; bestMove = m; }
+            alpha = Math.max(alpha, res.score);
+          } else {
+            if (res.score < bestScore) { bestScore = res.score; bestMove = m; }
+            beta = Math.min(beta, res.score);
+          }
+          if (beta <= alpha) break;
+        }
+
+        return { score: bestScore, move: bestMove };
       };
 
       const makeAIMove = () => {
-        const moves = getValidMoves(board, WHITE);
-        if (!moves.length) return;
+        const moves = getValidMoves(board, aiColor);
+        if (moves.length === 0) return;
 
-        // EASY：完全ランダム
+        let selectedMove = null;
+
         if (difficulty === DIFFICULTY.EASY) {
-          const m = moves[Math.floor(Math.random() * moves.length)];
-          makeMove(m.r, m.c, WHITE);
-          return;
-        }
-
-        // NORMAL：50%ランダム
-        if (difficulty === DIFFICULTY.NORMAL && Math.random() < 0.5) {
-          const m = moves[Math.floor(Math.random() * moves.length)];
-          makeMove(m.r, m.c, WHITE);
-          return;
-        }
-
-        // HARD：最大反転数
-        let best = moves[0];
-        let bestScore = -1;
-
-        for (const m of moves) {
-          let score = 0;
-          directions.forEach(([dx, dy]) => {
-            let x = m.r + dx, y = m.c + dy;
-            while (x >= 0 && x < 8 && y >= 0 && y < 8) {
-              if (board[x][y] === BLACK) score++;
-              else break;
-              x += dx; y += dy;
-            }
-          });
-          if (score > bestScore) {
-            bestScore = score;
-            best = m;
+          selectedMove = moves[Math.floor(Math.random() * moves.length)];
+        } else if (difficulty === DIFFICULTY.NORMAL) {
+          const corners = moves.filter(m =>
+            (m.row === 0 || m.row === 7) && (m.col === 0 || m.col === 7)
+          );
+          if (corners.length) {
+            selectedMove = corners[Math.floor(Math.random() * corners.length)];
+          } else {
+            const scored = moves.map(move => ({
+              move,
+              score: evaluateMove(board, move.row, move.col, aiColor),
+            }));
+            scored.sort((a,b) => b.score - a.score);
+            const top = scored.filter(s => s.score === scored[0].score);
+            selectedMove = top[Math.floor(Math.random() * top.length)].move;
           }
+        } else if (difficulty === DIFFICULTY.HARD) {
+          selectedMove = minimaxMedium(board, aiColor, 3).move;
+        } else {
+          selectedMove = minimaxAdvanced(board, aiColor, 5).move;
         }
-        makeMove(best.r, best.c, WHITE);
+
+        if (selectedMove) makeMove(selectedMove.row, selectedMove.col, aiColor);
       };
 
+      /** ===============================
+       *  UI helpers
+       * =============================== */
+      const getAIEmotion = () => {
+        const { black, white } = countPieces(board);
+        const aiScore = aiColor === BLACK ? black : white;
+        const playerScore = playerColor === BLACK ? black : white;
+        const diff = aiScore - playerScore;
+
+        if (diff > 15) return "😎";
+        if (diff > 8)  return "😏";
+        if (diff > 3)  return "🙂";
+        if (diff > -3) return "🤔";
+        if (diff > -8) return "😰";
+        return "😓";
+      };
+
+      const initBoard = () => {
+        const newBoard = getInitialBoard();
+        setBoard(newBoard);
+        setCurrentPlayer(BLACK);
+        setGameOver(false);
+        setHistory([]);
+        setValidMoves(getValidMoves(newBoard, BLACK));
+      };
+
+      const startNewGame = () => {
+        setCoinTossing(true);
+        setCoinResult(null);
+        setCoinTossCount((prev) => prev + 1);
+
+        setTimeout(() => {
+          const isPlayerFirst = Math.random() < 0.5;
+          setCoinResult(isPlayerFirst ? "heads" : "tails");
+
+          if (isPlayerFirst) {
+            setPlayerColor(BLACK);
+            setAiColor(WHITE);
+          } else {
+            setPlayerColor(WHITE);
+            setAiColor(BLACK);
+          }
+
+          setTimeout(() => {
+            setCoinTossing(false);
+            initBoard();
+          }, 2000);
+        }, 2000);
+      };
+
+      const redoCoinToss = () => {
+        if (coinTossCount >= 2) {
+          setShowDeathWarning(true);
+          setTimeout(() => setShowDeathWarning(false), 3000);
+          return;
+        }
+        if (!coinTossing) startNewGame();
+      };
+
+      const undo = () => {
+        // player + ai の2手戻し
+        if (history.length < 2) return;
+
+        setHistory((h) => {
+          const nh = [...h];
+          nh.pop();
+          nh.pop();
+          const last = nh[nh.length - 1];
+
+          if (last) {
+            setBoard(last.board.map(r => [...r]));
+            setCurrentPlayer(playerColor);
+          } else {
+            initBoard();
+          }
+          setGameOver(false);
+          return nh;
+        });
+      };
+
+      const handleCellClick = (row, col) => {
+        if (currentPlayer !== playerColor) return;
+        if (gameOver || aiThinking || coinTossing) return;
+        makeMove(row, col, playerColor);
+      };
+
+      /** ===============================
+       *  Effects (turn loop)
+       * =============================== */
       useEffect(() => {
+        if (!board || board.length === 0) return;
+
+        const moves = getValidMoves(board, currentPlayer);
+        setValidMoves(moves);
+
         if (gameOver) return;
 
-        const myMoves = getValidMoves(board, currentPlayer);
-        const oppMoves = getValidMoves(board, opponent(currentPlayer));
+        if (moves.length === 0) {
+          const opponent = currentPlayer === BLACK ? WHITE : BLACK;
+          const oppMoves = getValidMoves(board, opponent);
 
-        if (!myMoves.length && !oppMoves.length) {
-          setGameOver(true);
+          if (oppMoves.length === 0) {
+            endGame(board);
+          } else {
+            setTimeout(() => {
+              setCurrentPlayer((p) => (p === BLACK ? WHITE : BLACK));
+            }, 700);
+          }
           return;
         }
 
-        if (currentPlayer === WHITE && myMoves.length) {
-          setTimeout(makeAIMove, 500);
+        if (currentPlayer === aiColor && !aiThinking && !coinTossing) {
+          setAiThinking(true);
+          setTimeout(() => {
+            makeAIMove();
+            setAiThinking(false);
+          }, 600);
         }
+      }, [board, currentPlayer, gameOver, aiThinking, coinTossing, aiColor, difficulty]);
 
-        if (currentPlayer === WHITE && !myMoves.length) {
-          setCurrentPlayer(BLACK);
-        }
-      }, [board, currentPlayer]);
+      /** ===============================
+       *  Derived scores
+       * =============================== */
+      const { black, white } = useMemo(() => countPieces(board), [board]);
+      const playerScore = playerColor === BLACK ? black : white;
+      const aiScore = aiColor === BLACK ? black : white;
 
+      /** ===============================
+       *  Render
+       * =============================== */
       return (
-        <div className="p-6">
-          <h1 className="text-3xl font-bold text-center mb-4">パステルオセロ</h1>
-
-          <div className="flex justify-center gap-2 mb-4">
-            {Object.values(DIFFICULTY).map(d => (
-              <button
-                key={d}
-                onClick={() => {
-                  setDifficulty(d);
-                  setBoard(getInitialBoard());
-                  setCurrentPlayer(BLACK);
-                  setGameOver(false);
-                }}
-                className={`px-3 py-1 rounded-full ${
-                  difficulty === d ? "bg-blue-500 text-white" : "bg-blue-100"
-                }`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-8 gap-1 max-w-xs mx-auto bg-green-300 p-2 rounded">
-            {board.map((row, r) =>
-              row.map((cell, c) => (
-                <div
-                  key={r + "-" + c}
-                  onClick={() => currentPlayer === BLACK && makeMove(r, c, BLACK)}
-                  className="aspect-square bg-green-400 rounded flex items-center justify-center"
-                >
-                  {cell === BLACK && <div className="w-4/5 h-4/5 bg-black rounded-full" />}
-                  {cell === WHITE && <div className="w-4/5 h-4/5 bg-white rounded-full" />}
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-8">
+          {/* Coin toss overlay */}
+          {coinTossing && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+              <div className="bg-white rounded-3xl p-12 text-center shadow-2xl">
+                <h2 className="text-3xl font-bold text-gray-800 mb-8">コイントス！</h2>
+                <div className="mb-8 flex justify-center">
+                  <div
+                    className={`w-32 h-32 rounded-full flex items-center justify-center text-6xl shadow-lg ${coinResult === null ? "animate-coin-flip" : ""}`}
+                    style={{
+                      background:
+                        coinResult === null
+                          ? "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)"
+                          : coinResult === "heads"
+                          ? "#2c2c2c"
+                          : "#f5f5f5",
+                      border: "4px solid #FFD700",
+                    }}
+                  >
+                    {coinResult === null ? "🪙" : coinResult === "heads" ? "⚫" : "⚪"}
+                  </div>
                 </div>
-              ))
-            )}
-          </div>
 
-          {gameOver && (
-            <p className="text-center mt-4 font-bold">ゲーム終了</p>
+                {coinResult && (
+                  <div className="animate-fade-in">
+                    <p className="text-2xl font-bold mb-2" style={{ color: coinResult === "heads" ? "#2c2c2c" : "#666" }}>
+                      {coinResult === "heads" ? "あなたは先攻（黒）です！" : "あなたは後攻（白）です！"}
+                    </p>
+                    <p className="text-gray-600">
+                      {coinResult === "heads" ? "最初の一手を打ってください" : "AIが先手を打ちます"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
+
+          {/* Death warning */}
+          {showDeathWarning && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+              <div className="bg-gray-900 rounded-3xl p-12 text-center shadow-2xl border-4 border-red-600">
+                <div className="text-8xl mb-6 animate-skull-shake">💀</div>
+                <h2 className="text-4xl font-bold text-red-500 mb-4">これ以上はダメです</h2>
+                <p className="text-gray-300 text-lg">運命を受け入れなさい...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Animations */}
+          <style>{`
+            @keyframes coin-flip {
+              0% { transform: rotateY(0deg) translateY(0px); }
+              25% { transform: rotateY(180deg) translateY(-20px); }
+              50% { transform: rotateY(360deg) translateY(0px); }
+              75% { transform: rotateY(540deg) translateY(-20px); }
+              100% { transform: rotateY(720deg) translateY(0px); }
+            }
+            .animate-coin-flip { animation: coin-flip 2s ease-in-out infinite; }
+            @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+            .animate-fade-in { animation: fade-in 0.5s ease-out; }
+            @keyframes skull-shake { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-15deg); } 75% { transform: rotate(15deg); } }
+            .animate-skull-shake { animation: skull-shake 0.5s ease-in-out infinite; }
+          `}</style>
+
+          <div className="max-w-6xl mx-auto">
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-4xl font-bold text-gray-700">パステルオセロ</h1>
+
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="lg:hidden p-3 bg-white/80 rounded-xl shadow-lg hover:bg-white transition-colors"
+                aria-label="メニュー"
+              >
+                {menuOpen ? <XIcon size={28} /> : <MenuIcon size={28} />}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Board */}
+              <div className="lg:col-span-2">
+                <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-4 md:p-6">
+                  <div className="flex justify-around mb-6">
+                    <div className={`text-center p-4 rounded-2xl ${currentPlayer === playerColor ? "bg-gray-200" : "bg-gray-50"}`}>
+                      <div className="text-3xl mb-2">{playerColor === BLACK ? "⚫" : "⚪"}</div>
+                      <div className="text-sm text-gray-600">あなた</div>
+                      <div className="text-3xl font-bold text-gray-800">{playerScore}</div>
+                    </div>
+                    <div className={`text-center p-4 rounded-2xl ${currentPlayer === aiColor ? "bg-blue-100" : "bg-gray-50"}`}>
+                      <div className="text-3xl mb-2">{aiThinking ? "💭" : getAIEmotion()}</div>
+                      <div className="text-sm text-gray-600">AI</div>
+                      <div className="text-3xl font-bold text-gray-800">{aiScore}</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-100 p-2 md:p-4 rounded-2xl shadow-inner max-w-2xl mx-auto">
+                    <div className="grid grid-cols-8 gap-0.5 md:gap-1">
+                      {board.map((row, i) =>
+                        row.map((cell, j) => {
+                          const isValid = validMoves.some((m) => m.row === i && m.col === j);
+                          return (
+                            <div
+                              key={`${i}-${j}`}
+                              onClick={() => handleCellClick(i, j)}
+                              className={`aspect-square bg-green-200 rounded-lg flex items-center justify-center cursor-pointer transition-all
+                                ${isValid && currentPlayer === playerColor && !gameOver ? "hover:bg-green-300 ring-2 ring-green-400" : ""}
+                                ${cell !== EMPTY ? "cursor-default" : ""}`}
+                            >
+                              {cell === BLACK && <div className="w-4/5 h-4/5 bg-gray-800 rounded-full shadow-md"></div>}
+                              {cell === WHITE && <div className="w-4/5 h-4/5 bg-white rounded-full shadow-md"></div>}
+                              {cell === EMPTY && isValid && currentPlayer === playerColor && !gameOver && (
+                                <div className="w-2 h-2 bg-gray-400/50 rounded-full"></div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 mt-6">
+                    <button
+                      onClick={undo}
+                      disabled={history.length < 2 || gameOver}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-200 text-gray-700 rounded-xl hover:bg-blue-300 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
+                    >
+                      <UndoIcon size={20} />
+                      待った
+                    </button>
+
+                    <button
+                      onClick={startNewGame}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-colors"
+                      style={{ backgroundColor: "#FFCCBC" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#FFAB91")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFCCBC")}
+                    >
+                      <RotateCcwIcon size={20} />
+                      新規ゲーム
+                    </button>
+                  </div>
+
+                  {coinResult && !gameOver && coinTossCount < 2 && (
+                    <button
+                      onClick={redoCoinToss}
+                      disabled={coinTossing}
+                      className={`w-full mt-4 px-4 py-3 rounded-xl disabled:bg-gray-100 transition-colors text-sm font-bold ${
+                        coinTossCount === 1
+                          ? "bg-red-100 text-red-700 hover:bg-red-200 border-2 border-red-300 animate-pulse"
+                          : "bg-yellow-100 text-gray-700 hover:bg-yellow-200"
+                      }`}
+                    >
+                      {coinTossCount === 1 ? "💀 泣きの一回！これが最後です..." : "🪙 コイントスやり直し"}
+                    </button>
+                  )}
+
+                  {gameOver && (
+                    <div className="mt-6 p-4 bg-blue-100 rounded-2xl text-center">
+                      <div className="text-2xl font-bold text-gray-800 mb-2">
+                        {playerScore > aiScore ? "🎉 あなたの勝ち！" : playerScore < aiScore ? "😢 AIの勝ち" : "🤝 引き分け"}
+                      </div>
+                      <div className="text-gray-600">
+                        最終スコア - あなた: {playerScore} | AI: {aiScore}
+                      </div>
+                      <div className="text-sm text-gray-500 mt-2">
+                        あなたは{playerColor === BLACK ? "先攻（黒）" : "後攻（白）"}でした
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Side menu */}
+              <div
+                className={`
+                  ${menuOpen ? "block" : "hidden"}
+                  lg:block
+                  fixed lg:relative
+                  inset-0 lg:inset-auto
+                  z-40 lg:z-auto
+                  bg-black/50 lg:bg-transparent
+                  p-4 lg:p-0
+                `}
+                onClick={(e) => e.target === e.currentTarget && setMenuOpen(false)}
+              >
+                <div className="bg-white/95 lg:bg-transparent rounded-3xl lg:rounded-none p-4 lg:p-0 max-h-screen overflow-y-auto space-y-6">
+                  <button
+                    onClick={() => setMenuOpen(false)}
+                    className="lg:hidden ml-auto block p-2 bg-gray-100 rounded-xl mb-4"
+                    aria-label="閉じる"
+                  >
+                    <XIcon size={24} />
+                  </button>
+
+                  <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-700 mb-4">難易度</h3>
+                    <div className="space-y-2">
+                      {[
+                        { value: DIFFICULTY.EASY, label: "簡単", emoji: "😊" },
+                        { value: DIFFICULTY.NORMAL, label: "普通", emoji: "🤔" },
+                        { value: DIFFICULTY.HARD, label: "難しい", emoji: "😤" },
+                        { value: DIFFICULTY.DEMON, label: "鬼👹", emoji: "👹" },
+                      ].map(({ value, label, emoji }) => (
+                        <button
+                          key={value}
+                          onClick={() => {
+                            setDifficulty(value);
+                            startNewGame();
+                            setMenuOpen(false);
+                          }}
+                          className={`w-full px-4 py-3 rounded-xl transition-all ${
+                            difficulty === value
+                              ? "bg-blue-200 text-gray-800 font-bold"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          {emoji} {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-700 mb-4">通算成績</h3>
+                    <div className="space-y-3">
+                      {Object.entries(stats.difficultyStats || {}).map(([diff, rec]) => (
+                        <div key={diff} className="bg-gray-50 rounded-xl p-3">
+                          <div className="text-sm text-gray-600 mb-1 capitalize">{diff}</div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-green-600">勝利: {rec.wins}</span>
+                            <span className="text-red-600">敗北: {rec.losses}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
+                    <h3 className="text-lg font-bold text-gray-700 mb-4">直近5戦</h3>
+                    <div className="space-y-2">
+                      {(stats.recentGames || []).length === 0 ? (
+                        <div className="text-center text-gray-400 py-4">まだ対戦履歴がありません</div>
+                      ) : (
+                        (stats.recentGames || []).map((game, idx) => (
+                          <div key={idx} className="bg-gray-50 rounded-xl p-3 text-sm">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="capitalize text-gray-600">{game.difficulty}</span>
+                              <span
+                                className={`font-bold ${
+                                  game.result === "win"
+                                    ? "text-green-600"
+                                    : game.result === "loss"
+                                    ? "text-red-600"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {game.result === "win" ? "勝利" : game.result === "loss" ? "敗北" : "引分"}
+                              </span>
+                            </div>
+                            <div className="text-gray-500 text-xs flex justify-between">
+                              <span>
+                                {game.playerScore} - {game.aiScore}
+                              </span>
+                              <span>{game.playerColor === "black" ? "先攻⚫" : "後攻⚪"}</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+              {/* /Side menu */}
+            </div>
+          </div>
         </div>
       );
     };
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<OthelloGame />);
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<OthelloGame />);
   </script>
 
+  <!-- Service Worker -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js');
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("./service-worker.js")
+          .then((reg) => console.log("Service Worker registered:", reg.scope))
+          .catch((err) => console.error("Service Worker registration failed:", err));
+      });
     }
   </script>
 </body>
