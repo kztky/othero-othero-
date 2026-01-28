@@ -697,12 +697,12 @@
               <div className="lg:col-span-2">
                 <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-4 md:p-6">
                   <div className="flex justify-around mb-6">
-                    <div className={`text-center p-4 rounded-2xl ${currentPlayer === playerColor ? 'bg-gray-200' : 'bg-gray-50'}`}>
+                    <div className={\`text-center p-4 rounded-2xl \${currentPlayer === playerColor ? 'bg-gray-200' : 'bg-gray-50'}\`}>}`}>
                       <div className="text-3xl mb-2">{playerColor === BLACK ? '⚫' : '⚪'}</div>
                       <div className="text-sm text-gray-600">あなた</div>
                       <div className="text-3xl font-bold text-gray-800">{playerScore}</div>
                     </div>
-                    <div className={`text-center p-4 rounded-2xl ${currentPlayer === aiColor ? 'bg-blue-100' : 'bg-gray-50'}`}>
+                    <div className={\`text-center p-4 rounded-2xl \${currentPlayer === aiColor ? 'bg-blue-100' : 'bg-gray-50'}\`}>
                       <div className="text-3xl mb-2">{aiThinking ? '💭' : getAIEmotion()}</div>
                       <div className="text-sm text-gray-600">AI</div>
                       <div className="text-3xl font-bold text-gray-800">{aiScore}</div>
