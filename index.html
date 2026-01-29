@@ -3,14 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="パステルカラーのオセロゲーム - AIと対戦しよう！">
+  <meta name="description" content="パステルカラーのオセロゲーム - AIと対戦しよう!">
   <meta name="theme-color" content="#B8D4E8">
   <title>パステルオセロ</title>
   
+  <!-- PWA設定 -->
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  
+  <!-- React & Babel -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
   <style>
@@ -608,7 +619,7 @@
           {coinTossing && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="bg-white rounded-3xl p-12 text-center shadow-2xl">
-                <h2 className="text-3xl font-bold text-gray-800 mb-8">コイントス！</h2>
+                <h2 className="text-3xl font-bold text-gray-800 mb-8">コイントス!</h2>
                 
                 <div className="mb-8 flex justify-center">
                   <div 
@@ -631,7 +642,7 @@
                 {coinResult && (
                   <div className="animate-fade-in">
                     <p className="text-2xl font-bold mb-2" style={{ color: coinResult === 'heads' ? '#2c2c2c' : '#666' }}>
-                      {coinResult === 'heads' ? 'あなたは先攻（黒）です！' : 'あなたは後攻（白）です！'}
+                      {coinResult === 'heads' ? 'あなたは先攻(黒)です!' : 'あなたは後攻(白)です!'}
                     </p>
                     <p className="text-gray-600">
                       {coinResult === 'heads' ? '最初の一手を打ってください' : 'AIが先手を打ちます'}
@@ -689,7 +700,7 @@
                 className="lg:hidden p-3 bg-white/80 rounded-xl shadow-lg hover:bg-white transition-colors"
                 aria-label="メニュー"
               >
-                {React.createElement(menuOpen ? X : Menu, { size: 28 })}
+                {menuOpen ? <X size={28} /> : <Menu size={28} />}
               </button>
             </div>
             
@@ -740,7 +751,7 @@
                       disabled={history.length < 2 || gameOver}
                       className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-200 text-gray-700 rounded-xl hover:bg-blue-300 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
                     >
-                      {React.createElement(Undo, { size: 20 })}
+                      <Undo size={20} />
                       待った
                     </button>
                     <button
@@ -750,7 +761,7 @@
                       onMouseEnter={(e) => e.target.style.backgroundColor = '#FFAB91'}
                       onMouseLeave={(e) => e.target.style.backgroundColor = '#FFCCBC'}
                     >
-                      {React.createElement(RotateCcw, { size: 20 })}
+                      <RotateCcw size={20} />
                       新規ゲーム
                     </button>
                   </div>
@@ -766,7 +777,7 @@
                       }`}
                     >
                       {coinTossCount === 1 
-                        ? '💀 泣きの一回！これが最後です...' 
+                        ? '💀 泣きの一回!これが最後です...' 
                         : '🪙 コイントスやり直し (残り2回)'}
                     </button>
                   )}
@@ -774,13 +785,13 @@
                   {gameOver && (
                     <div className="mt-6 p-4 bg-blue-100 rounded-2xl text-center">
                       <div className="text-2xl font-bold text-gray-800 mb-2">
-                        {playerScore > aiScore ? '🎉 あなたの勝ち！' : playerScore < aiScore ? '😢 AIの勝ち' : '🤝 引き分け'}
+                        {playerScore > aiScore ? '🎉 あなたの勝ち!' : playerScore < aiScore ? '😢 AIの勝ち' : '🤝 引き分け'}
                       </div>
                       <div className="text-gray-600">
                         最終スコア - あなた: {playerScore} | AI: {aiScore}
                       </div>
                       <div className="text-sm text-gray-500 mt-2">
-                        あなたは{playerColor === BLACK ? '先攻（黒）' : '後攻（白）'}でした
+                        あなたは{playerColor === BLACK ? '先攻(黒)' : '後攻(白)'}でした
                       </div>
                     </div>
                   )}
@@ -803,7 +814,7 @@
                     onClick={() => setMenuOpen(false)}
                     className="lg:hidden ml-auto block p-2 bg-gray-100 rounded-xl mb-4"
                   >
-                    {React.createElement(X, { size: 24 })}
+                    <X size={24} />
                   </button>
 
                   <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
@@ -886,7 +897,16 @@
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<OthelloGame />);
   </script>
+
+  <!-- Service Worker登録 -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log('Service Worker registered:', reg))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
-
-
