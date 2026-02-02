@@ -601,18 +601,20 @@
     root.render(<OthelloGame />);
   </script>
 
- <script>
+  <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/othero-othero-/service-worker.js', { scope: '/othero-othero-/' })
-        .then(reg => console.log('SW registered', reg))
-        .catch(err => console.error('SW failed', err));
+      navigator.serviceWorker.register(
+        '/othero-othero-/service-worker.js',
+        { scope: '/othero-othero-/' }
+      );
     }
-</script>
+  </script>
+
 
 </body>
 </html>
       
+
 
 
 
