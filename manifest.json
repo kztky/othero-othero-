@@ -2,7 +2,7 @@
   "name": "パステルオセロ",
   "short_name": "オセロ",
   "description": "パステルカラーのオセロゲーム - AIと対戦！",
-  "start_url": "./index.html",
+  "start_url": "/othero-othero/index.html",
   "display": "standalone",
   "background_color": "#B8D4E8",
   "theme_color": "#B8D4E8",
@@ -21,4 +21,5 @@
       "purpose": "any maskable"
     }
   ]
+
 }
