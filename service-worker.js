@@ -1,49 +1,42 @@
 const CACHE_NAME = 'othello-pwa-v1';
 const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  '/othero-othero/',
+  '/othero-othero/index.html',
+  '/othero-othero/icon-192.png',
+  '/othero-othero/icon-512.png'
 ];
 
-// インストール時にキャッシュ
+// インストール
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(urlsToCache);
+    })
   );
+  self.skipWaiting();
 });
 
-// キャッシュから返す
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      }
-    )
-  );
-});
-
-// 古いキャッシュを削除
+// アクティブ化
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
+    caches.keys().then(names =>
+      Promise.all(
+        names.map(name => {
+          if (name !== CACHE_NAME) {
+            return caches.delete(name);
           }
         })
-      );
-    })
+      )
+    )
+  );
+  self.clients.claim();
+});
+
+// fetch（network first）
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    fetch(event.request).catch(() =>
+      caches.match(event.request)
+    )
   );
 });
