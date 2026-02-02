@@ -7,29 +7,19 @@
   <meta name="theme-color" content="#B8D4E8">
   <title>パステルオセロ</title>
   
-  <!-- PWA設定 -->
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
   <link rel="apple-touch-icon" href="./icon-192.png">
   
-  <!-- React & Babel -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      overflow-x: hidden;
-    }
+    body { margin: 0; padding: 0; overflow-x: hidden; }
+    .icon-btn svg { display: inline-block; vertical-align: middle; }
   </style>
 </head>
 <body>
@@ -37,7 +27,28 @@
 
   <script type="text/babel">
     const { useState, useEffect } = React;
-    const { RotateCcw, Undo, Menu, X } = lucide;
+
+    // アイコンコンポーネント(Lucide依存しない)
+    const MenuIcon = () => (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    );
+    const XIcon = ({ size = 24 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    );
+    const UndoIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+      </svg>
+    );
+    const RotateCcwIcon = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/>
+      </svg>
+    );
 
     const OthelloGame = () => {
       const BOARD_SIZE = 8;
@@ -45,20 +56,12 @@
       const BLACK = 1;
       const WHITE = 2;
       
-      const DIFFICULTY = {
-        EASY: 'easy',
-        NORMAL: 'normal',
-        HARD: 'hard',
-        DEMON: 'demon'
-      };
+      const DIFFICULTY = { EASY: 'easy', NORMAL: 'normal', HARD: 'hard', DEMON: 'demon' };
 
       const getInitialBoard = () => {
-        const newBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
-        newBoard[3][3] = WHITE;
-        newBoard[3][4] = BLACK;
-        newBoard[4][3] = BLACK;
-        newBoard[4][4] = WHITE;
-        return newBoard;
+        const b = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
+        b[3][3] = WHITE; b[3][4] = BLACK; b[4][3] = BLACK; b[4][4] = WHITE;
+        return b;
       };
 
       const [board, setBoard] = useState(getInitialBoard);
@@ -76,14 +79,14 @@
       const [showDeathWarning, setShowDeathWarning] = useState(false);
       const [menuOpen, setMenuOpen] = useState(false);
       const [stats, setStats] = useState(() => {
-        const saved = localStorage.getItem('othelloStats');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (!parsed.difficultyStats.demon) {
-            parsed.difficultyStats.demon = { wins: 0, losses: 0 };
+        try {
+          const saved = localStorage.getItem('othelloStats');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (!parsed.difficultyStats.demon) parsed.difficultyStats.demon = { wins: 0, losses: 0 };
+            return parsed;
           }
-          return parsed;
-        }
+        } catch(e) {}
         return {
           recentGames: [],
           difficultyStats: {
@@ -95,68 +98,38 @@
         };
       });
 
-      useEffect(() => {
-        setValidMoves(getValidMoves(board, BLACK));
-      }, []);
-
-      useEffect(() => {
-        localStorage.setItem('othelloStats', JSON.stringify(stats));
-      }, [stats]);
+      useEffect(() => { setValidMoves(getValidMoves(board, BLACK)); }, []);
+      useEffect(() => { try { localStorage.setItem('othelloStats', JSON.stringify(stats)); } catch(e) {} }, [stats]);
 
       useEffect(() => {
         if (board.length === 0) return;
-        
         const moves = getValidMoves(board, currentPlayer);
         setValidMoves(moves);
-        
         if (moves.length === 0 && !gameOver) {
-          const opponentMoves = getValidMoves(board, currentPlayer === BLACK ? WHITE : BLACK);
-          if (opponentMoves.length === 0) {
-            endGame();
-          } else {
-            setTimeout(() => {
-              setCurrentPlayer(currentPlayer === BLACK ? WHITE : BLACK);
-            }, 1000);
-          }
+          const opMoves = getValidMoves(board, currentPlayer === BLACK ? WHITE : BLACK);
+          if (opMoves.length === 0) { endGame(); }
+          else { setTimeout(() => { setCurrentPlayer(currentPlayer === BLACK ? WHITE : BLACK); }, 1000); }
         } else if (currentPlayer === aiColor && !gameOver && !aiThinking && !coinTossing) {
           setAiThinking(true);
-          setTimeout(() => {
-            makeAIMove();
-            setAiThinking(false);
-          }, 800);
+          setTimeout(() => { makeAIMove(); setAiThinking(false); }, 800);
         }
       }, [currentPlayer, board, gameOver]);
 
       const initBoard = () => {
-        const newBoard = getInitialBoard();
-        setBoard(newBoard);
-        setCurrentPlayer(BLACK);
-        setGameOver(false);
-        setHistory([]);
-        setValidMoves(getValidMoves(newBoard, BLACK));
+        const b = getInitialBoard();
+        setBoard(b); setCurrentPlayer(BLACK); setGameOver(false);
+        setHistory([]); setValidMoves(getValidMoves(b, BLACK));
       };
 
       const startNewGame = () => {
-        setCoinTossing(true);
-        setCoinResult(null);
+        setCoinTossing(true); setCoinResult(null);
         setCoinTossCount(prev => prev + 1);
-        
         setTimeout(() => {
-          const isPlayerFirst = Math.random() < 0.5;
-          setCoinResult(isPlayerFirst ? 'heads' : 'tails');
-          
-          if (isPlayerFirst) {
-            setPlayerColor(BLACK);
-            setAiColor(WHITE);
-          } else {
-            setPlayerColor(WHITE);
-            setAiColor(BLACK);
-          }
-          
-          setTimeout(() => {
-            setCoinTossing(false);
-            initBoard();
-          }, 2000);
+          const isFirst = Math.random() < 0.5;
+          setCoinResult(isFirst ? 'heads' : 'tails');
+          if (isFirst) { setPlayerColor(BLACK); setAiColor(WHITE); }
+          else { setPlayerColor(WHITE); setAiColor(BLACK); }
+          setTimeout(() => { setCoinTossing(false); initBoard(); }, 2000);
         }, 2000);
       };
 
@@ -166,45 +139,29 @@
           setTimeout(() => setShowDeathWarning(false), 3000);
           return;
         }
-        if (!coinTossing) {
-          startNewGame();
-        }
+        if (!coinTossing) startNewGame();
       };
 
       const getValidMoves = (board, player) => {
         const moves = [];
-        for (let row = 0; row < BOARD_SIZE; row++) {
-          for (let col = 0; col < BOARD_SIZE; col++) {
-            if (isValidMove(board, row, col, player)) {
-              moves.push({ row, col });
-            }
-          }
-        }
+        for (let r = 0; r < BOARD_SIZE; r++)
+          for (let c = 0; c < BOARD_SIZE; c++)
+            if (isValidMove(board, r, c, player)) moves.push({ row: r, col: c });
         return moves;
       };
 
       const isValidMove = (board, row, col, player) => {
         if (board[row][col] !== EMPTY) return false;
-        
-        const opponent = player === BLACK ? WHITE : BLACK;
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-        
-        for (const [dx, dy] of directions) {
-          let x = row + dx;
-          let y = col + dy;
-          let hasOpponent = false;
-          
-          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
+        const opp = player === BLACK ? WHITE : BLACK;
+        const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for (const [dx, dy] of dirs) {
+          let x = row+dx, y = col+dy, hasOpp = false;
+          while (x>=0 && x<BOARD_SIZE && y>=0 && y<BOARD_SIZE) {
             if (board[x][y] === EMPTY) break;
-            if (board[x][y] === opponent) {
-              hasOpponent = true;
-            } else if (board[x][y] === player && hasOpponent) {
-              return true;
-            } else {
-              break;
-            }
-            x += dx;
-            y += dy;
+            if (board[x][y] === opp) hasOpp = true;
+            else if (board[x][y] === player && hasOpp) return true;
+            else break;
+            x+=dx; y+=dy;
           }
         }
         return false;
@@ -212,98 +169,65 @@
 
       const makeMove = (row, col, player) => {
         if (!isValidMove(board, row, col, player)) return false;
-        
-        const newBoard = board.map(r => [...r]);
-        newBoard[row][col] = player;
-        
-        const opponent = player === BLACK ? WHITE : BLACK;
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-        
-        for (const [dx, dy] of directions) {
+        const nb = board.map(r => [...r]);
+        nb[row][col] = player;
+        const opp = player === BLACK ? WHITE : BLACK;
+        const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for (const [dx, dy] of dirs) {
           const toFlip = [];
-          let x = row + dx;
-          let y = col + dy;
-          
-          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-            if (newBoard[x][y] === EMPTY) break;
-            if (newBoard[x][y] === opponent) {
-              toFlip.push([x, y]);
-            } else if (newBoard[x][y] === player) {
-              toFlip.forEach(([fx, fy]) => {
-                newBoard[fx][fy] = player;
-              });
-              break;
-            } else {
-              break;
-            }
-            x += dx;
-            y += dy;
+          let x = row+dx, y = col+dy;
+          while (x>=0 && x<BOARD_SIZE && y>=0 && y<BOARD_SIZE) {
+            if (nb[x][y] === EMPTY) break;
+            if (nb[x][y] === opp) toFlip.push([x,y]);
+            else if (nb[x][y] === player) { toFlip.forEach(([fx,fy]) => { nb[fx][fy] = player; }); break; }
+            else break;
+            x+=dx; y+=dy;
           }
         }
-        
         setHistory([...history, { board: board.map(r => [...r]), player }]);
-        setBoard(newBoard);
+        setBoard(nb);
         setCurrentPlayer(player === BLACK ? WHITE : BLACK);
         return true;
       };
-
+      
       const makeAIMove = () => {
         const moves = getValidMoves(board, aiColor);
         if (moves.length === 0) return;
-        
         let selectedMove;
-        
         if (difficulty === DIFFICULTY.EASY) {
           selectedMove = moves[Math.floor(Math.random() * moves.length)];
         } else if (difficulty === DIFFICULTY.NORMAL) {
-          const corners = moves.filter(m => 
-            (m.row === 0 || m.row === 7) && (m.col === 0 || m.col === 7)
-          );
-          if (corners.length > 0) {
-            selectedMove = corners[Math.floor(Math.random() * corners.length)];
-          } else {
-            const scored = moves.map(move => ({
-              move,
-              score: evaluateMove(board, move.row, move.col, aiColor)
-            }));
-            scored.sort((a, b) => b.score - a.score);
-            const topMoves = scored.filter(s => s.score === scored[0].score);
-            selectedMove = topMoves[Math.floor(Math.random() * topMoves.length)].move;
+          const corners = moves.filter(m => (m.row===0||m.row===7)&&(m.col===0||m.col===7));
+          if (corners.length > 0) { selectedMove = corners[Math.floor(Math.random()*corners.length)]; }
+          else {
+            const scored = moves.map(m => ({ move:m, score:evaluateMove(board,m.row,m.col,aiColor) }));
+            scored.sort((a,b) => b.score-a.score);
+            const top = scored.filter(s => s.score===scored[0].score);
+            selectedMove = top[Math.floor(Math.random()*top.length)].move;
           }
         } else if (difficulty === DIFFICULTY.HARD) {
           selectedMove = minimaxMedium(board, aiColor, 3).move;
         } else if (difficulty === DIFFICULTY.DEMON) {
           selectedMove = minimaxAdvanced(board, aiColor, 5).move;
         }
-        
-        if (selectedMove) {
-          makeMove(selectedMove.row, selectedMove.col, aiColor);
-        }
+        if (selectedMove) makeMove(selectedMove.row, selectedMove.col, aiColor);
       };
 
       const evaluateMove = (board, row, col, player) => {
-        const tempBoard = board.map(r => [...r]);
-        const opponent = player === BLACK ? WHITE : BLACK;
-        tempBoard[row][col] = player;
-        
+        const opp = player === BLACK ? WHITE : BLACK;
         let score = 0;
         const corners = [[0,0],[0,7],[7,0],[7,7]];
-        if (corners.some(([r,c]) => r === row && c === col)) score += 100;
-        
-        const edges = row === 0 || row === 7 || col === 0 || col === 7;
-        if (edges) score += 10;
-        
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-        for (const [dx, dy] of directions) {
-          let x = row + dx, y = col + dy, flips = 0;
-          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-            if (tempBoard[x][y] === EMPTY) break;
-            if (tempBoard[x][y] === opponent) flips++;
-            else if (tempBoard[x][y] === player && flips > 0) {
-              score += flips;
-              break;
-            } else break;
-            x += dx; y += dy;
+        if (corners.some(([r,c]) => r===row&&c===col)) score += 100;
+        if (row===0||row===7||col===0||col===7) score += 10;
+        const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for (const [dx,dy] of dirs) {
+          let x=row+dx, y=col+dy, flips=0;
+          while (x>=0&&x<BOARD_SIZE&&y>=0&&y<BOARD_SIZE) {
+            if (board[x][y]===EMPTY) break;
+            if (board[x][y]===opp) flips++;
+            else if (board[x][y]===player&&flips>0) { score+=flips; break; }
+            else break;
+            x+=dx; y+=dy;
           }
         }
         return score;
@@ -311,340 +235,192 @@
 
       const simulateMove = (board, row, col, player) => {
         board[row][col] = player;
-        const opponent = player === BLACK ? WHITE : BLACK;
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
-        
-        for (const [dx, dy] of directions) {
+        const opp = player === BLACK ? WHITE : BLACK;
+        const dirs = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        for (const [dx,dy] of dirs) {
           const toFlip = [];
-          let x = row + dx, y = col + dy;
-          
-          while (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) {
-            if (board[x][y] === EMPTY) break;
-            if (board[x][y] === opponent) toFlip.push([x, y]);
-            else if (board[x][y] === player) {
-              toFlip.forEach(([fx, fy]) => board[fx][fy] = player);
-              break;
-            } else break;
-            x += dx; y += dy;
+          let x=row+dx, y=col+dy;
+          while (x>=0&&x<BOARD_SIZE&&y>=0&&y<BOARD_SIZE) {
+            if (board[x][y]===EMPTY) break;
+            if (board[x][y]===opp) toFlip.push([x,y]);
+            else if (board[x][y]===player) { toFlip.forEach(([fx,fy]) => board[fx][fy]=player); break; }
+            else break;
+            x+=dx; y+=dy;
           }
         }
       };
+
+      const positionWeights = [
+        [100,-20,10,5,5,10,-20,100],
+        [-20,-50,-2,-2,-2,-2,-50,-20],
+        [10,-2,-1,-1,-1,-1,-2,10],
+        [5,-2,-1,-1,-1,-1,-2,5],
+        [5,-2,-1,-1,-1,-1,-2,5],
+        [10,-2,-1,-1,-1,-1,-2,10],
+        [-20,-50,-2,-2,-2,-2,-50,-20],
+        [100,-20,10,5,5,10,-20,100]
+      ];
 
       const evaluateBoardMedium = (board, player) => {
-        const opponent = player === BLACK ? WHITE : BLACK;
+        const opp = player === BLACK ? WHITE : BLACK;
         let score = 0;
-        
-        const positionWeights = [
-          [100, -20, 10,  5,  5, 10, -20, 100],
-          [-20, -50, -2, -2, -2, -2, -50, -20],
-          [ 10,  -2, -1, -1, -1, -1,  -2,  10],
-          [  5,  -2, -1, -1, -1, -1,  -2,   5],
-          [  5,  -2, -1, -1, -1, -1,  -2,   5],
-          [ 10,  -2, -1, -1, -1, -1,  -2,  10],
-          [-20, -50, -2, -2, -2, -2, -50, -20],
-          [100, -20, 10,  5,  5, 10, -20, 100]
-        ];
-        
-        for (let i = 0; i < BOARD_SIZE; i++) {
-          for (let j = 0; j < BOARD_SIZE; j++) {
-            if (board[i][j] === player) {
-              score += positionWeights[i][j];
-            } else if (board[i][j] === opponent) {
-              score -= positionWeights[i][j];
-            }
+        for (let i=0;i<BOARD_SIZE;i++)
+          for (let j=0;j<BOARD_SIZE;j++) {
+            if (board[i][j]===player) score += positionWeights[i][j];
+            else if (board[i][j]===opp) score -= positionWeights[i][j];
           }
-        }
-        
         return score;
-      };
-      const minimaxMedium = (board, player, depth, alpha = -Infinity, beta = Infinity) => {
-        if (depth === 0) {
-          return { score: evaluateBoardMedium(board, aiColor), move: null };
-        }
-        
-        const moves = getValidMoves(board, player);
-        if (moves.length === 0) {
-          const opponentMoves = getValidMoves(board, player === aiColor ? playerColor : aiColor);
-          if (opponentMoves.length === 0) {
-            return { score: evaluateBoardMedium(board, aiColor), move: null };
-          }
-          return minimaxMedium(board, player === aiColor ? playerColor : aiColor, depth - 1, alpha, beta);
-        }
-        
-        let bestMove = moves[0];
-        let bestScore = player === aiColor ? -Infinity : Infinity;
-        
-        for (const move of moves) {
-          const tempBoard = board.map(r => [...r]);
-          simulateMove(tempBoard, move.row, move.col, player);
-          const result = minimaxMedium(tempBoard, player === aiColor ? playerColor : aiColor, depth - 1, alpha, beta);
-          
-          if (player === aiColor) {
-            if (result.score > bestScore) {
-              bestScore = result.score;
-              bestMove = move;
-            }
-            alpha = Math.max(alpha, result.score);
-          } else {
-            if (result.score < bestScore) {
-              bestScore = result.score;
-              bestMove = move;
-            }
-            beta = Math.min(beta, result.score);
-          }
-          
-          if (beta <= alpha) break;
-        }
-        
-        return { score: bestScore, move: bestMove };
       };
 
-      const evaluateBoardAdvanced = (board, player) => {
-        const opponent = player === BLACK ? WHITE : BLACK;
-        let score = 0;
-        
-        const positionWeights = [
-          [100, -20, 10,  5,  5, 10, -20, 100],
-          [-20, -50, -2, -2, -2, -2, -50, -20],
-          [ 10,  -2, -1, -1, -1, -1,  -2,  10],
-          [  5,  -2, -1, -1, -1, -1,  -2,   5],
-          [  5,  -2, -1, -1, -1, -1,  -2,   5],
-          [ 10,  -2, -1, -1, -1, -1,  -2,  10],
-          [-20, -50, -2, -2, -2, -2, -50, -20],
-          [100, -20, 10,  5,  5, 10, -20, 100]
-        ];
-        
-        for (let i = 0; i < BOARD_SIZE; i++) {
-          for (let j = 0; j < BOARD_SIZE; j++) {
-            if (board[i][j] === player) {
-              score += positionWeights[i][j];
-            } else if (board[i][j] === opponent) {
-              score -= positionWeights[i][j];
-            }
-          }
+      const minimaxMedium = (board, player, depth, alpha=-Infinity, beta=Infinity) => {
+        if (depth===0) return { score: evaluateBoardMedium(board, aiColor), move: null };
+        const moves = getValidMoves(board, player);
+        if (moves.length===0) {
+          const opMoves = getValidMoves(board, player===aiColor?playerColor:aiColor);
+          if (opMoves.length===0) return { score: evaluateBoardMedium(board, aiColor), move: null };
+          return minimaxMedium(board, player===aiColor?playerColor:aiColor, depth-1, alpha, beta);
         }
-        
-        const playerStable = countStableDiscs(board, player);
-        const opponentStable = countStableDiscs(board, opponent);
-        score += (playerStable - opponentStable) * 25;
-        
-        const playerMoves = getValidMoves(board, player).length;
-        const opponentMoves = getValidMoves(board, opponent).length;
-        score += (playerMoves - opponentMoves) * 5;
-        
-        const corners = [[0,0], [0,7], [7,0], [7,7]];
-        for (const [r, c] of corners) {
-          if (board[r][c] === player) score += 100;
-          if (board[r][c] === opponent) score -= 100;
+        let bestMove=moves[0], bestScore = player===aiColor ? -Infinity : Infinity;
+        for (const move of moves) {
+          const tmp = board.map(r=>[...r]);
+          simulateMove(tmp, move.row, move.col, player);
+          const res = minimaxMedium(tmp, player===aiColor?playerColor:aiColor, depth-1, alpha, beta);
+          if (player===aiColor) { if(res.score>bestScore){bestScore=res.score;bestMove=move;} alpha=Math.max(alpha,res.score); }
+          else { if(res.score<bestScore){bestScore=res.score;bestMove=move;} beta=Math.min(beta,res.score); }
+          if (beta<=alpha) break;
         }
-        
-        return score;
+        return { score: bestScore, move: bestMove };
       };
 
       const countStableDiscs = (board, player) => {
         let count = 0;
-        const corners = [[0,0], [0,7], [7,0], [7,7]];
-        
-        for (const [cornerRow, cornerCol] of corners) {
-          if (board[cornerRow][cornerCol] === player) {
+        const corners = [[0,0],[0,7],[7,0],[7,7]];
+        for (const [cr,cc] of corners) {
+          if (board[cr][cc]===player) {
             count++;
-            count += countStableFromCorner(board, cornerRow, cornerCol, player);
+            const rowDir = cr===0?1:-1;
+            for (let i=cr+rowDir;i>=0&&i<BOARD_SIZE;i+=rowDir) { if(board[i][cc]===player)count++; else break; }
+            const colDir = cc===0?1:-1;
+            for (let j=cc+colDir;j>=0&&j<BOARD_SIZE;j+=colDir) { if(board[cr][j]===player)count++; else break; }
           }
         }
         return count;
       };
 
-      const countStableFromCorner = (board, startRow, startCol, player) => {
-        let count = 0;
-        
-        const rowDir = startRow === 0 ? 1 : -1;
-        for (let i = startRow + rowDir; i >= 0 && i < BOARD_SIZE; i += rowDir) {
-          if (board[i][startCol] === player) count++;
-          else break;
-        }
-        
-        const colDir = startCol === 0 ? 1 : -1;
-        for (let j = startCol + colDir; j >= 0 && j < BOARD_SIZE; j += colDir) {
-          if (board[startRow][j] === player) count++;
-          else break;
-        }
-        
-        return count;
+      const evaluateBoardAdvanced = (board, player) => {
+        const opp = player === BLACK ? WHITE : BLACK;
+        let score = 0;
+        for (let i=0;i<BOARD_SIZE;i++)
+          for (let j=0;j<BOARD_SIZE;j++) {
+            if (board[i][j]===player) score += positionWeights[i][j];
+            else if (board[i][j]===opp) score -= positionWeights[i][j];
+          }
+        score += (countStableDiscs(board,player)-countStableDiscs(board,opp))*25;
+        score += (getValidMoves(board,player).length-getValidMoves(board,opp).length)*5;
+        const corners=[[0,0],[0,7],[7,0],[7,7]];
+        for (const [r,c] of corners) { if(board[r][c]===player)score+=100; if(board[r][c]===opp)score-=100; }
+        return score;
       };
 
-      const minimaxAdvanced = (board, player, depth, alpha = -Infinity, beta = Infinity) => {
-        if (depth === 0) {
-          return { score: evaluateBoardAdvanced(board, WHITE), move: null };
-        }
-        
+      const evaluateMoveQuick = (board, row, col) => {
+        const corners=[[0,0],[0,7],[7,0],[7,7]];
+        if (corners.some(([r,c])=>r===row&&c===col)) return 1000;
+        const danger=[[0,1],[1,0],[1,1],[0,6],[1,6],[1,7],[6,0],[6,1],[7,1],[6,6],[6,7],[7,6]];
+        if (danger.some(([r,c])=>r===row&&c===col)) return -500;
+        return (row===0||row===7||col===0||col===7) ? 100 : 0;
+      };
+
+      const minimaxAdvanced = (board, player, depth, alpha=-Infinity, beta=Infinity) => {
+        if (depth===0) return { score: evaluateBoardAdvanced(board, aiColor), move: null };
         const moves = getValidMoves(board, player);
-        if (moves.length === 0) {
-          const opponentMoves = getValidMoves(board, player === WHITE ? BLACK : WHITE);
-          if (opponentMoves.length === 0) {
-            return { score: evaluateBoardAdvanced(board, WHITE), move: null };
-          }
-          return minimaxAdvanced(board, player === WHITE ? BLACK : WHITE, depth - 1, alpha, beta);
+        if (moves.length===0) {
+          const opp = player===aiColor?playerColor:aiColor;
+          const opMoves = getValidMoves(board, opp);
+          if (opMoves.length===0) return { score: evaluateBoardAdvanced(board, aiColor), move: null };
+          return minimaxAdvanced(board, opp, depth-1, alpha, beta);
         }
-        
-        let bestMove = moves[0];
-        let bestScore = player === WHITE ? -Infinity : Infinity;
-        
-        const sortedMoves = [...moves].sort((a, b) => {
-          const scoreA = evaluateMoveQuick(board, a.row, a.col, player);
-          const scoreB = evaluateMoveQuick(board, b.row, b.col, player);
-          return player === WHITE ? scoreB - scoreA : scoreA - scoreB;
-        });
-        
-        for (const move of sortedMoves) {
-          const tempBoard = board.map(r => [...r]);
-          simulateMove(tempBoard, move.row, move.col, player);
-          const result = minimaxAdvanced(tempBoard, player === WHITE ? BLACK : WHITE, depth - 1, alpha, beta);
-          
-          if (player === WHITE) {
-            if (result.score > bestScore) {
-              bestScore = result.score;
-              bestMove = move;
-            }
-            alpha = Math.max(alpha, result.score);
-          } else {
-            if (result.score < bestScore) {
-              bestScore = result.score;
-              bestMove = move;
-            }
-            beta = Math.min(beta, result.score);
-          }
-          
-          if (beta <= alpha) break;
+        let bestMove=moves[0], bestScore = player===aiColor ? -Infinity : Infinity;
+        const sorted = [...moves].sort((a,b) => evaluateMoveQuick(board,b.row,b.col)-evaluateMoveQuick(board,a.row,a.col));
+        for (const move of sorted) {
+          const tmp = board.map(r=>[...r]);
+          simulateMove(tmp, move.row, move.col, player);
+          const opp = player===aiColor?playerColor:aiColor;
+          const res = minimaxAdvanced(tmp, opp, depth-1, alpha, beta);
+          if (player===aiColor) { if(res.score>bestScore){bestScore=res.score;bestMove=move;} alpha=Math.max(alpha,res.score); }
+          else { if(res.score<bestScore){bestScore=res.score;bestMove=move;} beta=Math.min(beta,res.score); }
+          if (beta<=alpha) break;
         }
-        
         return { score: bestScore, move: bestMove };
       };
 
-      const evaluateMoveQuick = (board, row, col, player) => {
-        const corners = [[0,0], [0,7], [7,0], [7,7]];
-        if (corners.some(([r,c]) => r === row && c === col)) return 1000;
-        
-        const dangerZones = [[0,1], [1,0], [1,1], [0,6], [1,6], [1,7], [6,0], [6,1], [7,1], [6,6], [6,7], [7,6]];
-        if (dangerZones.some(([r,c]) => r === row && c === col)) return -500;
-        
-        const edges = row === 0 || row === 7 || col === 0 || col === 7;
-        return edges ? 100 : 0;
-      };
-
       const handleCellClick = (row, col) => {
-        if (currentPlayer === playerColor && !gameOver && !aiThinking && !coinTossing) {
-          makeMove(row, col, playerColor);
-        }
+        if (currentPlayer===playerColor && !gameOver && !aiThinking && !coinTossing) makeMove(row,col,playerColor);
       };
 
       const undo = () => {
-        if (history.length >= 2) {
-          const newHistory = [...history];
-          newHistory.pop();
-          newHistory.pop();
-          const lastState = newHistory[newHistory.length - 1];
-          
-          if (lastState) {
-            setBoard(lastState.board);
-            setCurrentPlayer(playerColor);
-          } else {
-            initBoard();
-          }
-          setHistory(newHistory);
-          setGameOver(false);
+        if (history.length>=2) {
+          const nh = [...history]; nh.pop(); nh.pop();
+          const last = nh[nh.length-1];
+          if (last) { setBoard(last.board); setCurrentPlayer(playerColor); }
+          else initBoard();
+          setHistory(nh); setGameOver(false);
         }
       };
 
       const endGame = () => {
-        setGameOver(true);
-        setCoinTossCount(0);
+        setGameOver(true); setCoinTossCount(0);
         const { black, white } = countPieces();
-        const playerScore = playerColor === BLACK ? black : white;
-        const aiScore = aiColor === BLACK ? black : white;
-        const result = playerScore > aiScore ? 'win' : playerScore < aiScore ? 'loss' : 'draw';
-        
-        const newGame = {
-          date: new Date().toISOString(),
-          difficulty,
-          playerScore,
-          aiScore,
-          result,
-          playerColor: playerColor === BLACK ? 'black' : 'white'
-        };
-        
-        const newStats = { ...stats };
-        newStats.recentGames = [newGame, ...stats.recentGames].slice(0, 5);
-        
-        if (result === 'win') {
-          newStats.difficultyStats[difficulty].wins++;
-        } else if (result === 'loss') {
-          newStats.difficultyStats[difficulty].losses++;
-        }
-        
-        setStats(newStats);
+        const ps = playerColor===BLACK?black:white;
+        const as = aiColor===BLACK?black:white;
+        const result = ps>as?'win':ps<as?'loss':'draw';
+        const newGame = { date:new Date().toISOString(), difficulty, playerScore:ps, aiScore:as, result, playerColor:playerColor===BLACK?'black':'white' };
+        const ns = { ...stats };
+        ns.recentGames = [newGame,...stats.recentGames].slice(0,5);
+        if (result==='win') ns.difficultyStats[difficulty].wins++;
+        else if (result==='loss') ns.difficultyStats[difficulty].losses++;
+        setStats(ns);
       };
 
       const countPieces = () => {
-        let black = 0, white = 0;
-        board.forEach(row => {
-          row.forEach(cell => {
-            if (cell === BLACK) black++;
-            if (cell === WHITE) white++;
-          });
-        });
+        let black=0, white=0;
+        board.forEach(row => row.forEach(cell => { if(cell===BLACK)black++; if(cell===WHITE)white++; }));
         return { black, white };
       };
 
       const getAIEmotion = () => {
         const { black, white } = countPieces();
-        const aiScore = aiColor === BLACK ? black : white;
-        const playerScore = playerColor === BLACK ? black : white;
-        const diff = aiScore - playerScore;
-        
-        if (diff > 15) return '😎';
-        if (diff > 8) return '😏';
-        if (diff > 3) return '🙂';
-        if (diff > -3) return '🤔';
-        if (diff > -8) return '😰';
+        const diff = (aiColor===BLACK?black:white)-(playerColor===BLACK?black:white);
+        if (diff>15) return '😎';
+        if (diff>8) return '😏';
+        if (diff>3) return '🙂';
+        if (diff>-3) return '🤔';
+        if (diff>-8) return '😰';
         return '😓';
       };
 
       const { black, white } = countPieces();
-      const playerScore = playerColor === BLACK ? black : white;
-      const aiScore = aiColor === BLACK ? black : white;
-
+      const playerScore = playerColor===BLACK?black:white;
+      const aiScore = aiColor===BLACK?black:white;
+      
       return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-8">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 p-4">
           {coinTossing && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
               <div className="bg-white rounded-3xl p-12 text-center shadow-2xl">
                 <h2 className="text-3xl font-bold text-gray-800 mb-8">コイントス!</h2>
-                
                 <div className="mb-8 flex justify-center">
-                  <div 
-                    className={`w-32 h-32 rounded-full flex items-center justify-center text-6xl shadow-lg ${
-                      coinResult === null ? 'animate-coin-flip' : ''
-                    }`}
-                    style={{
-                      background: coinResult === null 
-                        ? 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)'
-                        : coinResult === 'heads' 
-                        ? '#2c2c2c' 
-                        : '#f5f5f5',
-                      border: '4px solid #FFD700'
-                    }}
-                  >
-                    {coinResult === null ? '🪙' : coinResult === 'heads' ? '⚫' : '⚪'}
+                  <div className={`w-32 h-32 rounded-full flex items-center justify-center text-6xl shadow-lg ${coinResult===null?'animate-coin-flip':''}`}
+                    style={{ background:coinResult===null?'linear-gradient(135deg,#FFD700,#FFA500)':coinResult==='heads'?'#2c2c2c':'#f5f5f5', border:'4px solid #FFD700' }}>
+                    {coinResult===null?'🪙':coinResult==='heads'?'⚫':'⚪'}
                   </div>
                 </div>
-                
                 {coinResult && (
-                  <div className="animate-fade-in">
-                    <p className="text-2xl font-bold mb-2" style={{ color: coinResult === 'heads' ? '#2c2c2c' : '#666' }}>
-                      {coinResult === 'heads' ? 'あなたは先攻(黒)です!' : 'あなたは後攻(白)です!'}
+                  <div>
+                    <p className="text-2xl font-bold mb-2" style={{color:coinResult==='heads'?'#2c2c2c':'#666'}}>
+                      {coinResult==='heads'?'あなたは先攻(黒)です!':'あなたは後攻(白)です!'}
                     </p>
                     <p className="text-gray-600">
-                      {coinResult === 'heads' ? '最初の一手を打ってください' : 'AIが先手を打ちます'}
+                      {coinResult==='heads'?'最初の一手を打ってください':'AIが先手を打ちます'}
                     </p>
                   </div>
                 )}
@@ -653,7 +429,7 @@
           )}
 
           {showDeathWarning && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
               <div className="bg-gray-900 rounded-3xl p-12 text-center shadow-2xl border-4 border-red-600">
                 <div className="text-8xl mb-6 animate-skull-shake">💀</div>
                 <h2 className="text-4xl font-bold text-red-500 mb-4">これ以上はダメです</h2>
@@ -664,189 +440,121 @@
 
           <style>{`
             @keyframes coin-flip {
-              0% { transform: rotateY(0deg) translateY(0px); }
-              25% { transform: rotateY(180deg) translateY(-20px); }
-              50% { transform: rotateY(360deg) translateY(0px); }
-              75% { transform: rotateY(540deg) translateY(-20px); }
-              100% { transform: rotateY(720deg) translateY(0px); }
+              0%{transform:rotateY(0deg) translateY(0px);}
+              25%{transform:rotateY(180deg) translateY(-20px);}
+              50%{transform:rotateY(360deg) translateY(0px);}
+              75%{transform:rotateY(540deg) translateY(-20px);}
+              100%{transform:rotateY(720deg) translateY(0px);}
             }
-            .animate-coin-flip {
-              animation: coin-flip 2s ease-in-out infinite;
-            }
-            @keyframes fade-in {
-              from { opacity: 0; transform: translateY(10px); }
-              to { opacity: 1; transform: translateY(0); }
-            }
-            .animate-fade-in {
-              animation: fade-in 0.5s ease-out;
-            }
+            .animate-coin-flip { animation: coin-flip 2s ease-in-out infinite; }
             @keyframes skull-shake {
-              0%, 100% { transform: rotate(0deg); }
-              25% { transform: rotate(-15deg); }
-              75% { transform: rotate(15deg); }
+              0%,100%{transform:rotate(0deg);}
+              25%{transform:rotate(-15deg);}
+              75%{transform:rotate(15deg);}
             }
-            .animate-skull-shake {
-              animation: skull-shake 0.5s ease-in-out infinite;
-            }
+            .animate-skull-shake { animation: skull-shake 0.5s ease-in-out infinite; }
           `}</style>
 
           <div className="max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-              <h1 className="text-4xl font-bold text-gray-700">パステルオセロ</h1>
-              
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="lg:hidden p-3 bg-white/80 rounded-xl shadow-lg hover:bg-white transition-colors"
-                aria-label="メニュー"
-              >
-                {menuOpen ? <X size={28} /> : <Menu size={28} />}
+            <div className="flex justify-between items-center mb-4">
+              <h1 className="text-3xl font-bold text-gray-700">パステルオセロ</h1>
+              <button onClick={()=>setMenuOpen(!menuOpen)} className="lg:hidden p-3 bg-white/80 rounded-xl shadow-lg">
+                {menuOpen ? <XIcon size={28}/> : <MenuIcon />}
               </button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
-                <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-4 md:p-6">
-                  <div className="flex justify-around mb-6">
-                    <div className={`text-center p-4 rounded-2xl ${currentPlayer === playerColor ? 'bg-gray-200' : 'bg-gray-50'}`}>
-                      <div className="text-3xl mb-2">{playerColor === BLACK ? '⚫' : '⚪'}</div>
-                      <div className="text-sm text-gray-600">あなた</div>
-                      <div className="text-3xl font-bold text-gray-800">{playerScore}</div>
+                <div className="bg-white/80 rounded-3xl shadow-lg p-4">
+                  <div className="flex justify-around mb-4">
+                    <div className={`text-center p-3 rounded-2xl ${currentPlayer===playerColor?'bg-gray-200':'bg-gray-50'}`}>
+                      <div className="text-2xl mb-1">{playerColor===BLACK?'⚫':'⚪'}</div>
+                      <div className="text-xs text-gray-600">あなた</div>
+                      <div className="text-2xl font-bold text-gray-800">{playerScore}</div>
                     </div>
-                    <div className={`text-center p-4 rounded-2xl ${currentPlayer === aiColor ? 'bg-blue-100' : 'bg-gray-50'}`}>
-                      <div className="text-3xl mb-2">{aiThinking ? '💭' : getAIEmotion()}</div>
-                      <div className="text-sm text-gray-600">AI</div>
-                      <div className="text-3xl font-bold text-gray-800">{aiScore}</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-green-100 p-2 md:p-4 rounded-2xl shadow-inner max-w-2xl mx-auto">
-                    <div className="grid grid-cols-8 gap-0.5 md:gap-1">
-                      {board.map((row, i) => 
-                        row.map((cell, j) => {
-                          const isValid = validMoves.some(m => m.row === i && m.col === j);
-                          return (
-                            <div
-                              key={`${i}-${j}`}
-                              onClick={() => handleCellClick(i, j)}
-                              className={`aspect-square bg-green-200 rounded-lg flex items-center justify-center cursor-pointer transition-all
-                                ${isValid && currentPlayer === playerColor && !gameOver ? 'hover:bg-green-300 ring-2 ring-green-400' : ''}
-                                ${cell !== EMPTY ? 'cursor-default' : ''}`}
-                            >
-                              {cell === BLACK && <div className="w-4/5 h-4/5 bg-gray-800 rounded-full shadow-md"></div>}
-                              {cell === WHITE && <div className="w-4/5 h-4/5 bg-white rounded-full shadow-md"></div>}
-                              {cell === EMPTY && isValid && currentPlayer === playerColor && !gameOver && 
-                                <div className="w-2 h-2 bg-gray-400/50 rounded-full"></div>
-                              }
-                            </div>
-                          );
-                        })
-                      )}
+                    <div className={`text-center p-3 rounded-2xl ${currentPlayer===aiColor?'bg-blue-100':'bg-gray-50'}`}>
+                      <div className="text-2xl mb-1">{aiThinking?'💭':getAIEmotion()}</div>
+                      <div className="text-xs text-gray-600">AI</div>
+                      <div className="text-2xl font-bold text-gray-800">{aiScore}</div>
                     </div>
                   </div>
 
-                  <div className="flex gap-4 mt-6">
-                    <button
-                      onClick={undo}
-                      disabled={history.length < 2 || gameOver}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-200 text-gray-700 rounded-xl hover:bg-blue-300 disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
-                    >
-                      <Undo size={20} />
-                      待った
+                  <div className="bg-green-100 p-2 rounded-2xl shadow-inner max-w-md mx-auto">
+                    <div className="grid grid-cols-8 gap-0.5">
+                      {board.map((row,i) => row.map((cell,j) => {
+                        const isValid = validMoves.some(m=>m.row===i&&m.col===j);
+                        return (
+                          <div key={`${i}-${j}`} onClick={()=>handleCellClick(i,j)}
+                            className={`aspect-square bg-green-200 rounded flex items-center justify-center cursor-pointer
+                              ${isValid&&currentPlayer===playerColor&&!gameOver?'hover:bg-green-300 ring-2 ring-green-400':''}`}>
+                            {cell===BLACK && <div className="w-4/5 h-4/5 bg-gray-800 rounded-full shadow-md"></div>}
+                            {cell===WHITE && <div className="w-4/5 h-4/5 bg-white border border-gray-300 rounded-full shadow-md"></div>}
+                            {cell===EMPTY && isValid && currentPlayer===playerColor && !gameOver && <div className="w-2 h-2 bg-gray-400/50 rounded-full"></div>}
+                          </div>
+                        );
+                      }))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-4">
+                    <button onClick={undo} disabled={history.length<2||gameOver}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-200 text-gray-700 rounded-xl hover:bg-blue-300 disabled:bg-gray-200 disabled:text-gray-400">
+                      <UndoIcon /> 待った
                     </button>
-                    <button
-                      onClick={startNewGame}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-coral-200 text-gray-700 rounded-xl hover:bg-coral-300 transition-colors"
-                      style={{ backgroundColor: '#FFCCBC' }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#FFAB91'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = '#FFCCBC'}
-                    >
-                      <RotateCcw size={20} />
-                      新規ゲーム
+                    <button onClick={startNewGame}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-gray-700 rounded-xl"
+                      style={{backgroundColor:'#FFCCBC'}}>
+                      <RotateCcwIcon /> 新規ゲーム
                     </button>
                   </div>
 
-                  {coinResult && !gameOver && coinTossCount < 2 && (
-                    <button
-                      onClick={redoCoinToss}
-                      disabled={coinTossing}
-                      className={`w-full mt-4 px-4 py-3 rounded-xl disabled:bg-gray-100 transition-colors text-sm font-bold ${
-                        coinTossCount === 1 
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200 border-2 border-red-300 animate-pulse'
-                          : 'bg-yellow-100 text-gray-700 hover:bg-yellow-200'
-                      }`}
-                    >
-                      {coinTossCount === 1 
-                        ? '💀 泣きの一回!これが最後です...' 
-                        : '🪙 コイントスやり直し (残り2回)'}
+                  {coinResult && !gameOver && coinTossCount<2 && (
+                    <button onClick={redoCoinToss} disabled={coinTossing}
+                      className={`w-full mt-3 px-4 py-3 rounded-xl text-sm font-bold ${coinTossCount===1?'bg-red-100 text-red-700 border-2 border-red-300':'bg-yellow-100 text-gray-700'}`}>
+                      {coinTossCount===1?'💀 泣きの一回!これが最後です...':'🪙 コイントスやり直し (残り2回)'}
                     </button>
                   )}
 
                   {gameOver && (
-                    <div className="mt-6 p-4 bg-blue-100 rounded-2xl text-center">
-                      <div className="text-2xl font-bold text-gray-800 mb-2">
-                        {playerScore > aiScore ? '🎉 あなたの勝ち!' : playerScore < aiScore ? '😢 AIの勝ち' : '🤝 引き分け'}
+                    <div className="mt-4 p-4 bg-blue-100 rounded-2xl text-center">
+                      <div className="text-2xl font-bold text-gray-800 mb-1">
+                        {playerScore>aiScore?'🎉 あなたの勝ち!':playerScore<aiScore?'😢 AIの勝ち':'🤝 引き分け'}
                       </div>
-                      <div className="text-gray-600">
-                        最終スコア - あなた: {playerScore} | AI: {aiScore}
-                      </div>
-                      <div className="text-sm text-gray-500 mt-2">
-                        あなたは{playerColor === BLACK ? '先攻(黒)' : '後攻(白)'}でした
-                      </div>
+                      <div className="text-gray-600">最終スコア - あなた: {playerScore} | AI: {aiScore}</div>
+                      <div className="text-sm text-gray-500 mt-1">あなたは{playerColor===BLACK?'先攻(黒)':'後攻(白)'}でした</div>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className={`
-                ${menuOpen ? 'block' : 'hidden'} 
-                lg:block
-                fixed lg:relative
-                inset-0 lg:inset-auto
-                z-40 lg:z-auto
-                bg-black/50 lg:bg-transparent
-                p-4 lg:p-0
-              `}
-              onClick={(e) => e.target === e.currentTarget && setMenuOpen(false)}
-              >
-                <div className="bg-white/95 lg:bg-transparent rounded-3xl lg:rounded-none p-4 lg:p-0 max-h-screen overflow-y-auto space-y-6">
-                  <button
-                    onClick={() => setMenuOpen(false)}
-                    className="lg:hidden ml-auto block p-2 bg-gray-100 rounded-xl mb-4"
-                  >
-                    <X size={24} />
+              <div className={`${menuOpen?'block':'hidden'} lg:block fixed lg:relative inset-0 lg:inset-auto z-40 lg:z-auto bg-black/50 lg:bg-transparent p-4 lg:p-0`}
+                onClick={(e)=>e.target===e.currentTarget&&setMenuOpen(false)}>
+                <div className="bg-white/95 lg:bg-transparent rounded-3xl lg:rounded-none p-4 lg:p-0 max-h-screen overflow-y-auto space-y-4">
+                  <button onClick={()=>setMenuOpen(false)} className="lg:hidden ml-auto block p-2 bg-gray-100 rounded-xl">
+                    <XIcon size={24}/>
                   </button>
 
-                  <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">難易度</h3>
+                  <div className="bg-white/80 rounded-3xl shadow-lg p-4">
+                    <h3 className="text-lg font-bold text-gray-700 mb-3">難易度</h3>
                     <div className="space-y-2">
                       {[
-                        { value: DIFFICULTY.EASY, label: '簡単', emoji: '😊' },
-                        { value: DIFFICULTY.NORMAL, label: '普通', emoji: '🤔' },
-                        { value: DIFFICULTY.HARD, label: '難しい', emoji: '😤' },
-                        { value: DIFFICULTY.DEMON, label: '鬼👹', emoji: '👹' }
-                      ].map(({ value, label, emoji }) => (
-                        <button
-                          key={value}
-                          onClick={() => { 
-                            setDifficulty(value); 
-                            startNewGame();
-                            setMenuOpen(false);
-                          }}
-                          className={`w-full px-4 py-3 rounded-xl transition-all ${
-                            difficulty === value 
-                              ? 'bg-blue-200 text-gray-800 font-bold' 
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
+                        {value:DIFFICULTY.EASY,label:'簡単',emoji:'😊'},
+                        {value:DIFFICULTY.NORMAL,label:'普通',emoji:'🤔'},
+                        {value:DIFFICULTY.HARD,label:'難しい',emoji:'😤'},
+                        {value:DIFFICULTY.DEMON,label:'鬼👹',emoji:'👹'}
+                      ].map(({value,label,emoji})=>(
+                        <button key={value} onClick={()=>{setDifficulty(value);startNewGame();setMenuOpen(false);}}
+                          className={`w-full px-4 py-3 rounded-xl ${difficulty===value?'bg-blue-200 text-gray-800 font-bold':'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                           {emoji} {label}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">通算成績</h3>
-                    <div className="space-y-3">
-                      {Object.entries(stats.difficultyStats).map(([diff, { wins, losses }]) => (
+                  <div className="bg-white/80 rounded-3xl shadow-lg p-4">
+                    <h3 className="text-lg font-bold text-gray-700 mb-3">通算成績</h3>
+                    <div className="space-y-2">
+                      {Object.entries(stats.difficultyStats).map(([diff,{wins,losses}])=>(
                         <div key={diff} className="bg-gray-50 rounded-xl p-3">
                           <div className="text-sm text-gray-600 mb-1 capitalize">{diff}</div>
                           <div className="flex justify-between text-sm">
@@ -858,26 +566,23 @@
                     </div>
                   </div>
 
-                  <div className="bg-white/80 backdrop-blur rounded-3xl shadow-lg p-6">
-                    <h3 className="text-lg font-bold text-gray-700 mb-4">直近5戦</h3>
+                  <div className="bg-white/80 rounded-3xl shadow-lg p-4">
+                    <h3 className="text-lg font-bold text-gray-700 mb-3">直近5戦</h3>
                     <div className="space-y-2">
-                      {stats.recentGames.length === 0 ? (
+                      {stats.recentGames.length===0?(
                         <div className="text-center text-gray-400 py-4">まだ対戦履歴がありません</div>
-                      ) : (
-                        stats.recentGames.map((game, idx) => (
+                      ):(
+                        stats.recentGames.map((game,idx)=>(
                           <div key={idx} className="bg-gray-50 rounded-xl p-3 text-sm">
                             <div className="flex justify-between items-center mb-1">
                               <span className="capitalize text-gray-600">{game.difficulty}</span>
-                              <span className={`font-bold ${
-                                game.result === 'win' ? 'text-green-600' : 
-                                game.result === 'loss' ? 'text-red-600' : 'text-gray-600'
-                              }`}>
-                                {game.result === 'win' ? '勝利' : game.result === 'loss' ? '敗北' : '引分'}
+                              <span className={`font-bold ${game.result==='win'?'text-green-600':game.result==='loss'?'text-red-600':'text-gray-600'}`}>
+                                {game.result==='win'?'勝利':game.result==='loss'?'敗北':'引分'}
                               </span>
                             </div>
                             <div className="text-gray-500 text-xs flex justify-between">
                               <span>{game.playerScore} - {game.aiScore}</span>
-                              <span>{game.playerColor === 'black' ? '先攻⚫' : '後攻⚪'}</span>
+                              <span>{game.playerColor==='black'?'先攻⚫':'後攻⚪'}</span>
                             </div>
                           </div>
                         ))
@@ -896,15 +601,15 @@
     root.render(<OthelloGame />);
   </script>
 
-  <!-- Service Worker登録 -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js')
-          .then(reg => console.log('Service Worker registered:', reg))
-          .catch(err => console.log('Service Worker registration failed:', err));
+          .then(reg => console.log('SW registered:', reg))
+          .catch(err => console.log('SW failed:', err));
       });
     }
   </script>
 </body>
 </html>
+      
