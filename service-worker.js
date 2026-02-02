@@ -1,4 +1,4 @@
-const CACHE_NAME = 'othello-pwa-v1';
+const CACHE_NAME = 'othello-pwa-v2';
 const urlsToCache = [
   '/othero-othero/',
   '/othero-othero/index.html',
@@ -35,8 +35,8 @@ self.addEventListener('activate', event => {
 // fetch（network first）
 self.addEventListener('fetch', event => {
   event.respondWith(
-    fetch(event.request).catch(() =>
-      caches.match(event.request)
-    )
+    fetch(event.request).catch(() => caches.match(event.request))
   );
 });
+
+
